@@ -5,7 +5,9 @@ The Symfony web application for [chess-crawl](https://github.com/xormania/chess-
 This first increment supplies a runnable application shell and a small provider
 and player preview. The preview exercises Live Components without contacting a
 chess provider or chess-crawl. Backend integration is a later increment.
-Returning to the Foundation page starts a fresh preview, including browser Back.
+Returning through Turbo or loading a new Foundation document starts a fresh
+preview. Native browser Back may preserve the complete preview in the browser's
+page cache; its provider selection and Live state remain consistent.
 
 ## Stack
 
@@ -49,6 +51,10 @@ HTTP_PORT=8080 HTTPS_PORT=8443 HTTP3_PORT=8443 docker compose up --build --wait
 ```
 
 Then open [https://localhost:8443](https://localhost:8443).
+HTTP requests on port 8080 redirect to that HTTPS port, preserving the path and query.
+With a custom HTTPS port, recreate PHP after changing Caddy routes or global
+options so startup can check the redirect configuration again. Use the same port
+variables with `docker compose up --force-recreate --wait php`.
 
 After pulling a change to the dependency lock file, install it explicitly:
 
