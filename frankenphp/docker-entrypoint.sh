@@ -48,6 +48,10 @@ if [ "$1" = 'frankenphp' ] && [ "${HTTPS_PORT:-443}" != '443' ]; then
         while :; do
             CADDY_HTTP_REDIRECT_CONFIG="
 $redirect_address {
+    # Caddy strips IPv6 brackets when the incoming authority includes a port.
+    # Without a source port, {host} already retains the brackets.
+    @ipv6 expression {host}.contains(':') && !{host}.startsWith('[')
+    redir @ipv6 https://[{host}]:${HTTPS_PORT}{uri} 308
     redir https://{host}:${HTTPS_PORT}{uri} 308
 }
 "

@@ -273,8 +273,19 @@ jobs:
         if: needs.changes.outputs.run_checks == 'true'
         run: |
           for method in GET POST; do
-            redirect=$(curl --fail --silent --show-error --request "$method" --output /dev/null --write-out '%{http_code} %{redirect_url}' 'http://localhost:8080/foundation?provider=lichess&player=xor%20test')
-            test "$redirect" = '308 https://localhost:8443/foundation?provider=lichess&player=xor%20test'
+            # Exercise URL authorities over the same connection, without relying
+            # on the runner or Docker bridge having IPv6 networking enabled.
+            for host in localhost 127.0.0.1 '[::1]' '[2001:db8::42]' '[::ffff:192.0.2.1]'; do
+              for source_port in '' ":$HTTP_PORT"; do
+                authority="$host$source_port"
+                redirect=$(curl --fail --silent --show-error --request "$method" --header "Host: $authority" --output /dev/null --write-out '%{http_code} %{redirect_url}' "http://localhost:$HTTP_PORT/foundation?provider=lichess&player=xor%20test")
+                expected="308 https://$host:$HTTPS_PORT/foundation?provider=lichess&player=xor%20test"
+                if [[ "$redirect" != "$expected" ]]; then
+                  printf 'Unexpected %s redirect for %s: %s (expected %s)\n' "$method" "$authority" "$redirect" "$expected" >&2
+                  exit 1
+                fi
+              done
+            done
           done
       - name: Verify development Mate capabilities
         if: needs.changes.outputs.run_checks == 'true' && matrix.name == 'development'
