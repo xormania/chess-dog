@@ -18,6 +18,7 @@ final class FoundationTest extends WebTestCase
         self::assertSelectorTextContains('h1', 'Your chess archive, within reach.');
         self::assertSelectorExists('a[href="/foundation"]');
         self::assertSelectorExists('script[type="importmap"]');
+        self::assertSelectorNotExists('meta[name="turbo-cache-control"][content="no-cache"]');
     }
 
     public function testFoundationRendersTheLivePreviewAndAccessibleDialog(): void
@@ -34,5 +35,6 @@ final class FoundationTest extends WebTestCase
         self::assertSelectorExists('[data-testid="provider-input"] option[value="lichess"]');
         self::assertSelectorExists('[data-testid="player-input"]');
         self::assertSelectorExists('dialog[data-testid="modal-dialog"][aria-labelledby]');
+        self::assertSelectorExists('meta[name="turbo-cache-control"][content="no-cache"]');
     }
 }

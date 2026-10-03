@@ -34,8 +34,14 @@ export default class extends Controller {
         }
     }
 
-    closeOnClickOutside({ target }) {
-        if (target === this.modalTarget) {
+    closeOnClickOutside({ target, clientX, clientY }) {
+        if (target !== this.modalTarget) {
+            return;
+        }
+
+        // Native dialog backdrop clicks target the dialog, as do its padding clicks.
+        const bounds = this.modalTarget.getBoundingClientRect();
+        if (clientX < bounds.left || clientX > bounds.right || clientY < bounds.top || clientY > bounds.bottom) {
             this.close();
         }
     }

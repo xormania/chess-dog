@@ -11,7 +11,7 @@
         tabindex: '-1',
         'aria-hidden': 'true',
         'aria-labelledby': _modal_title_id,
-        class: 'relative bg-neutral-primary-soft text-body border border-default rounded-base shadow-sm p-4 md:p-6 m-auto z-50 backdrop:transition-discrete backdrop:duration-150 open:backdrop:bg-dark-backdrop/70'|tailwind_classes,
+        class: ('relative bg-neutral-primary-soft text-body border border-default rounded-base shadow-sm p-4 md:p-6 m-auto z-50 backdrop:transition-discrete backdrop:duration-150 open:backdrop:bg-dark-backdrop/70 ' ~ (showCloseButton ? '[&>header]:pr-10' : ''))|tailwind_classes,
         'data-flowbite-modal-target': 'modal',
         'data-action': ('keydown.esc->flowbite-modal#close:prevent ' ~ (backdrop is not same as('static') ? 'click->flowbite-modal#closeOnClickOutside' : ''))|html_attr_type('sst'),
     }) }}

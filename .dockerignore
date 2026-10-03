@@ -22,7 +22,10 @@
 **/Dockerfile
 **/Thumbs.db
 .github/
+.agents/
+.claude/
 docs/
+mate/
 public/bundles/
 tests/
 var/

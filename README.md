@@ -5,6 +5,7 @@ The Symfony web application for [chess-crawl](https://github.com/xormania/chess-
 This first increment supplies a runnable application shell and a small provider
 and player preview. The preview exercises Live Components without contacting a
 chess provider or chess-crawl. Backend integration is a later increment.
+Returning to the Foundation page starts a fresh preview, including browser Back.
 
 ## Stack
 
@@ -53,6 +54,7 @@ After pulling a change to the dependency lock file, install it explicitly:
 
 ```bash
 docker compose exec php composer install --prefer-dist --no-interaction
+docker compose exec -T php vendor/bin/mate discover --no-interaction
 ```
 
 Useful commands:
@@ -67,6 +69,41 @@ docker compose down
 `docker compose down` retains the generated `var/` and Caddy volumes. The webapp
 pack includes Doctrine, configured for optional SQLite application storage in
 `var/`; this increment has no entities or application database requirements.
+
+## Local development with Symfony AI Mate
+
+The development dependencies include [Symfony AI Mate](https://symfony.com/doc/current/ai/components/mate.html)
+and its official Symfony and Monolog extensions. Mate exposes CLI tools for
+inspecting the compiled container, profiler and logs. This release uses a CLI;
+there is no MCP server or client configuration to start.
+
+Start the development stack, then discover the installed tools:
+
+```bash
+docker compose exec -T php vendor/bin/mate discover --no-interaction
+docker compose exec -T php vendor/bin/mate tools:list
+docker compose exec -T php vendor/bin/mate tools:inspect symfony-services --format=json
+docker compose exec -T php vendor/bin/mate tools:call server-info --format=json
+```
+
+Use the Docker invocation so Mate shares the application's PHP 8.5 runtime and
+the `app_var` volume containing its container, profiler and logs. Host PHP is not
+required. Visit the application before inspecting request profiles.
+
+`mate/config.php` records this invocation and PHP version. `mate/extensions.php`
+records enabled extensions and generated skills. Codex reads the generated
+`AGENTS.md` block and `.agents/skills/`; Claude Code imports that orientation
+through `CLAUDE.md` and `.claude/skills/`. Generated instructions and skills are
+managed by Mate; put project notes outside its managed markers.
+
+Run explicit discovery after dependency or Mate configuration changes. The
+current discovery plugin can miss a project when Composer runs from a PHAR, so
+do not rely on its automatic hook. Commit the reviewed configuration and
+generated instructions together with the lock file.
+
+Mate requires no model provider credentials for these diagnostics. It is a
+development dependency and its configuration and agent skills are excluded
+from the production image.
 
 ## Validate
 
@@ -85,7 +122,15 @@ suite outside CI requires Chrome and a matching driver; the application Docker
 image does not include a browser.
 
 The Docker checks build and start both development and production configurations,
-then fetch rendered pages and their compiled stylesheet over HTTP.
+then fetch rendered pages and their compiled stylesheet over HTTPS, trusting
+Caddy's generated local CA. They also check separate Caddy storage for the two
+runtimes, development Mate tools, and Mate's absence from production.
+
+CI caches Composer downloads, the pinned Tailwind executable, the matching
+Chrome driver, and shared Docker build layers. Dependencies are still installed
+from the lock and assets rebuilt on each application run. Documentation-only
+PRs skip expensive setup while retaining the three named checks; an invalid
+scope decision fails those checks. Pushes and manual runs always validate.
 
 ## Build the production image
 
@@ -93,6 +138,7 @@ Provide runtime secrets through the deployment environment. For a local smoke
 check, export `APP_SECRET` and `CADDY_MERCURE_JWT_SECRET`, then run:
 
 ```bash
+docker compose down
 docker compose -f compose.yaml -f compose.prod.yaml up --build --wait
 ```
 
@@ -100,6 +146,9 @@ Selecting these files omits the development bind mount and watcher. The image
 installs production dependencies, warms the application, builds minified
 Tailwind CSS, then compiles AssetMapper assets. The final image runs as
 `www-data` and includes the application and its built assets.
+Production uses separate `caddy_data_prod` and `caddy_config_prod` volumes. This
+keeps its certificates readable without reusing development storage owned by
+root; both modes retain their own Caddy storage across shutdowns.
 
 The Symfony Docker runtime retains its bundled Mercure capabilities. There is
 no application event integration in this increment. Chess-crawl's API and hub
@@ -123,5 +172,7 @@ preserved in [frankenphp/LICENSE](frankenphp/LICENSE). Flowbite components were
 installed through the [Symfony UX Toolkit](https://ux.symfony.com/toolkit)'s
 Flowbite v4 kit; its MIT notice is preserved in
 [third-party/SYMFONY-UX-LICENSE](third-party/SYMFONY-UX-LICENSE).
+Mate's generated instructions and skills retain their upstream MIT notice in
+[third-party/SYMFONY-AI-LICENSE](third-party/SYMFONY-AI-LICENSE).
 
 Chess Dog is licensed under [Apache 2.0](LICENSE).
