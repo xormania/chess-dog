@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Browser;
 
+use Facebook\WebDriver\Chrome\ChromeOptions;
 use Facebook\WebDriver\Remote\DriverCommand;
 use Facebook\WebDriver\WebDriverBy;
 use Facebook\WebDriver\WebDriverDimension;
@@ -16,7 +17,11 @@ final class FoundationLifecycleTest extends PantherTestCase
 {
     public function testNativeNavigationBackStartsAConsistentFreshPreview(): void
     {
-        $client = self::createPantherClient();
+        // A BFCache restore legitimately retains the entire working Live component.
+        // This regression exercises a new document with native form restoration.
+        self::stopWebServer();
+        $chromeOptions = (new ChromeOptions())->addArguments(['--disable-features=BackForwardCache']);
+        $client = self::createPantherClient([], [], ['capabilities' => [ChromeOptions::CAPABILITY => $chromeOptions]]);
         $client->request('GET', '/foundation');
         $client->waitFor('[data-controller~="flowbite-modal"][data-modal-connected="true"]');
 
@@ -34,6 +39,7 @@ final class FoundationLifecycleTest extends PantherTestCase
 
         $client->back();
         $client->waitFor('[data-controller~="flowbite-modal"][data-modal-connected="true"]');
+        self::assertNull($client->executeScript('return window.__nativeHistoryDocument ?? null;'), 'Back must create a new document for this form-restoration regression.');
         self::assertSame('', $client->findElement(WebDriverBy::cssSelector('[data-testid="player-input"]'))->getAttribute('value'));
         self::assertSame('chesscom', $client->findElement(WebDriverBy::cssSelector('[data-testid="provider-input"]'))->getAttribute('value'));
         self::assertSelectorTextContains('[data-testid="preview-summary"]', 'Choose a player to build the preview.');
@@ -42,6 +48,7 @@ final class FoundationLifecycleTest extends PantherTestCase
         $client->findElement(WebDriverBy::cssSelector('[data-testid="player-input"]'))->sendKeys('next-player');
         $client->waitForElementToContain('[data-testid="preview-summary"]', 'Chess.com / next-player');
         self::assertSame('chesscom', $client->findElement(WebDriverBy::cssSelector('[data-testid="provider-input"]'))->getAttribute('value'));
+        self::stopWebServer();
     }
 
     public function testNativeDialogCancellationAndCloseSynchronizeAccessibleState(): void

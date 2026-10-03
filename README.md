@@ -5,7 +5,9 @@ The Symfony web application for [chess-crawl](https://github.com/xormania/chess-
 This first increment supplies a runnable application shell and a small provider
 and player preview. The preview exercises Live Components without contacting a
 chess provider or chess-crawl. Backend integration is a later increment.
-Returning to the Foundation page starts a fresh preview, including browser Back.
+Returning through Turbo or loading a new Foundation document starts a fresh
+preview. Native browser Back may preserve the complete preview in the browser's
+page cache; its provider selection and Live state remain consistent.
 
 ## Stack
 
