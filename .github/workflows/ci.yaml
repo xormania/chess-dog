@@ -358,6 +358,9 @@ jobs:
       - name: Verify native tooling and container storage agree
         if: needs.changes.outputs.run_checks == 'true' && matrix.name == 'development'
         run: scripts/check-shared-storage --url "https://localhost:$HTTPS_PORT" --ca-file "$RUNNER_TEMP/caddy-root.crt" --check-migration
+      - name: Verify existing development user IDs
+        if: needs.changes.outputs.run_checks == 'true' && matrix.name == 'development'
+        run: scripts/check-dev-user 0:0 33:33
       - name: Print container logs on failure
         if: failure() && needs.changes.outputs.run_checks == 'true'
         run: docker compose logs --no-color || true

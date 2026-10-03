@@ -66,6 +66,8 @@ supports `--help`; setup options include `--env test`, `--skip-assets`, an optio
 current UID/GID as development-image build arguments. Both PHP and Tailwind run
 as that user, including later `compose exec` calls. `LOCAL_UID` and `LOCAL_GID`
 can override these defaults; rebuild the image after changing either value.
+Numeric IDs that already exist in the base image are supported through the
+development account alias. Selecting UID 0 runs the development process as root.
 Direct `docker compose` remains available; export those variables yourself when
 your user IDs differ from the defaults of 1000.
 
@@ -200,6 +202,11 @@ This helper checks UID/GID, bidirectional writes, generated CSS, both Mate servi
 contexts and a profile from an actual container request. It warms and clears the
 native dev cache. It requires Python 3 and curl in addition to the development tools.
 Without `--ca-file`, it copies the running Caddy local CA to its temporary directory.
+
+`scripts/check-dev-user` builds development images for existing numeric IDs and
+checks their runtime identity, writable home/Caddy storage, and bind-mount file
+ownership. It defaults to `0:0` and `33:33`; pass other `UID:GID` pairs or use
+`--builder NAME` / `--tag-prefix PREFIX` to customize the checks.
 
 CI validates both Docker configurations over trusted HTTPS. Development checks
 also seed legacy root-owned Caddy storage, verify ownership migration and run the

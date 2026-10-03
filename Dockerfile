@@ -55,9 +55,6 @@ CMD [ "frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile" ]
 # Dev FrankenPHP image
 FROM frankenphp_base AS frankenphp_dev
 
-ARG LOCAL_UID=1000
-ARG LOCAL_GID=1000
-
 ENV APP_ENV=dev
 ENV XDEBUG_MODE=off
 ENV FRANKENPHP_WORKER_CONFIG=watch
@@ -70,15 +67,23 @@ RUN <<-EOF
 	apt-get update
 	apt-get install -y --no-install-recommends libcap2-bin
 	rm -rf /var/lib/apt/lists/*
+	setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/frankenphp
+	git config --system --add safe.directory /app
+EOF
+
+# Keep dependency layers reusable when building for another host identity.
+ARG LOCAL_UID=1000
+ARG LOCAL_GID=1000
+
+RUN <<-EOF
 	# Match the host owner of the source bind mount, including compose exec.
 	if ! getent group "$LOCAL_GID" >/dev/null; then
 		groupadd --gid "$LOCAL_GID" nonroot
 	fi
-	useradd --uid "$LOCAL_UID" --gid "$LOCAL_GID" -m -s /bin/bash nonroot
+	# Keep a stable home/account even when the numeric UID already exists.
+	useradd --non-unique --uid "$LOCAL_UID" --gid "$LOCAL_GID" -m -s /bin/bash nonroot
 	mkdir -p /data/caddy /config/caddy
 	chown -R "$LOCAL_UID:$LOCAL_GID" /data/caddy /config/caddy
-	setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/frankenphp
-	git config --system --add safe.directory /app
 EOF
 
 COPY --link frankenphp/conf.d/20-app.dev.ini $PHP_INI_DIR/app.conf.d/

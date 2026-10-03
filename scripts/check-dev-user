@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Exercise the real dev image's account setup without touching a running stack.
+set -euo pipefail
+
+builder_args=()
+tag_prefix=chess-dog-dev-user-check
+identities=()
+while (($#)); do
+    case "$1" in
+        -h|--help)
+            cat <<'HELP'
+Usage: scripts/check-dev-user [--builder NAME] [--tag-prefix PREFIX] [UID:GID ...]
+
+Build development images and check numeric identity, home/Caddy write access,
+and ownership of a file written through a disposable bind mount.
+Defaults to 0:0 and 33:33 (IDs already present in the Debian base image).
+Uses the selected Docker Buildx builder; dependency layers are reused.
+Tagged test images remain available for inspection after the check.
+
+Examples:
+  scripts/check-dev-user
+  scripts/check-dev-user 1000:1000 33:1000
+  scripts/check-dev-user --builder my-builder --tag-prefix local-id-check 0:0
+HELP
+            exit 0
+            ;;
+        --builder|--tag-prefix)
+            if [[ $# -lt 2 || -z $2 ]]; then
+                printf '%s requires a value.\n' "$1" >&2
+                exit 2
+            fi
+            if [[ $1 == --builder ]]; then builder_args=(--builder "$2"); else tag_prefix=$2; fi
+            shift 2
+            ;;
+        *)
+            if [[ ! $1 =~ ^[0-9]+:[0-9]+$ ]]; then
+                printf 'Expected UID:GID, got %s (see --help).\n' "$1" >&2
+                exit 2
+            fi
+            identities+=("$1")
+            shift
+            ;;
+    esac
+done
+if ((${#identities[@]} == 0)); then identities=(0:0 33:33); fi
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+probe_root=$(mktemp -d)
+probe_dir="$probe_root/probe"
+mkdir "$probe_dir"
+# Keep the parent owned by the caller so an empty probe can be removed even
+# after the tested identity takes ownership of it (including under sticky /tmp).
+trap 'rmdir "$probe_dir" "$probe_root" || printf "Inspect retained probe files at %s\n" "$probe_root" >&2' EXIT
+
+for identity in "${identities[@]}"; do
+    local_uid=${identity%:*}
+    local_gid=${identity#*:}
+    tag="$tag_prefix-$local_uid-$local_gid"
+    docker buildx build "${builder_args[@]}" --load --target frankenphp_dev \
+        --build-arg "LOCAL_UID=$local_uid" --build-arg "LOCAL_GID=$local_gid" \
+        --tag "$tag" .
+
+    # The probe directory belongs to this test identity, without changing the checkout.
+    docker run --rm --user root --entrypoint sh \
+        --mount "type=bind,src=$probe_dir,dst=/probe" "$tag" \
+        -ec 'chown "$1:$2" /probe' sh "$local_uid" "$local_gid"
+    docker run --rm --entrypoint sh \
+        --mount "type=bind,src=$probe_dir,dst=/probe" "$tag" -euc '
+            test "$(id -u)" = "$1"
+            test "$(id -g)" = "$2"
+            test "$(id -u nonroot)" = "$1"
+            test "$(id -g nonroot)" = "$2"
+            test "$HOME" = /home/nonroot
+            for directory in "$HOME" /data/caddy /config/caddy /probe; do
+                printf writable > "$directory/identity-probe"
+                test "$(stat -c %u "$directory/identity-probe")" = "$1"
+                test "$(stat -c %g "$directory/identity-probe")" = "$2"
+                rm "$directory/identity-probe"
+            done
+        ' sh "$local_uid" "$local_gid"
+    printf 'Development UID:GID %s passed.\n' "$identity"
+done
