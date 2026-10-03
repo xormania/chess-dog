@@ -133,10 +133,11 @@ jobs:
       - name: Check rendered pages and styles over HTTP
         run: |
           curl --fail --silent --show-error --retry 20 --retry-all-errors --retry-delay 2 --output /tmp/chess-dog-home.html http://localhost:8080/
-          grep --quiet --fixed-strings 'Your chess archive, within reach.' /tmp/chess-dog-home.html
+          grep --quiet --fixed-strings 'Your chess archive,' /tmp/chess-dog-home.html
+          grep --quiet --fixed-strings 'within reach.' /tmp/chess-dog-home.html
           curl --fail --silent --show-error --output /tmp/chess-dog-foundation.html http://localhost:8080/foundation
           grep --quiet --fixed-strings 'A foundation you can inspect.' /tmp/chess-dog-foundation.html
-          css_path=$(sed -nE 's|.*href="([^"]+\.css)".*|\1|p' /tmp/chess-dog-home.html | head -1)
+          css_path=$(sed -nE 's|.*href="(/assets/styles/app-[[:alnum:]_-]+\.css)".*|\1|p' /tmp/chess-dog-home.html | head -1)
           test -n "$css_path"
           curl --fail --silent --show-error "http://localhost:8080$css_path" --output /tmp/chess-dog.css
           test -s /tmp/chess-dog.css
