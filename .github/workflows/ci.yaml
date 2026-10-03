@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  symfony:
+    name: Symfony / PHP 8.5
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      APP_ENV: test
+      PANTHER_APP_ENV: test
+      PANTHER_ERROR_SCREENSHOT_DIR: ./var/error-screenshots
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: intl, mbstring, pdo_sqlite, zip
+          tools: composer:v2
+          coverage: none
+      - name: Locate Composer download cache
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-php85-composer-${{ hashFiles('composer.lock') }}
+          restore-keys: ${{ runner.os }}-php85-composer-
+      - name: Install locked dependencies
+        run: |
+          composer validate --strict
+          composer install --prefer-dist --no-interaction --no-progress
+      - name: Validate PHP, Symfony configuration, and templates
+        run: |
+          rg --files src tests -g '*.php' -0 | xargs -0 -n 1 php -l
+          php bin/console lint:yaml config --parse-tags
+          php bin/console lint:twig templates
+          php bin/console lint:container --resolve-env-vars
+      - name: Compile browser assets
+        run: |
+          php bin/console tailwind:build --minify
+          php bin/console asset-map:compile
+      - name: Install matching browser drivers
+        run: vendor/bin/bdi detect drivers
+      - name: Run application and browser tests
+        run: vendor/bin/phpunit --log-junit var/test-results.xml
+      - name: Upload test failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: symfony-test-failures
+          path: |
+            var/error-screenshots/
+            var/log/test.log
+            var/test-results.xml
+          retention-days: 7
+          if-no-files-found: ignore
+
+  docker:
+    name: Docker / ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: development
+            target: frankenphp_dev
+            image: dev
+          - name: production
+            target: frankenphp_prod
+            image: prod
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
+      COMPOSE_PROJECT_NAME: chess-dog-ci
+      HTTP_PORT: '8080'
+      HTTPS_PORT: '8443'
+      HTTP3_PORT: '8443'
+      APP_SECRET: ci-smoke-secret
+      CADDY_MERCURE_JWT_SECRET: ci-only-unused-mercure-key
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          load: true
+          tags: app-php-${{ matrix.image }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+      - name: Configure Compose smoke environment
+        env:
+          IMAGE_MODE: ${{ matrix.name }}
+        run: |
+          cat > "$RUNNER_TEMP/chess-dog-ci.yaml" <<'YAML'
+          services:
+            php:
+              environment:
+                SERVER_NAME: ':80'
+                DEFAULT_URI: 'http://localhost:8080'
+                APP_SECRET: 'ci-smoke-secret'
+          YAML
+          mode_file=compose.prod.yaml
+          if [[ "$IMAGE_MODE" == development ]]; then
+            mode_file=compose.override.yaml
+          fi
+          echo "COMPOSE_FILE=compose.yaml:$mode_file:$RUNNER_TEMP/chess-dog-ci.yaml" >> "$GITHUB_ENV"
+      - name: Start Compose application and wait for health checks
+        run: |
+          docker compose config --quiet
+          docker compose up --no-build --wait --wait-timeout 120
+      - name: Check rendered pages and styles over HTTP
+        run: |
+          curl --fail --silent --show-error --retry 20 --retry-all-errors --retry-delay 2 --output /tmp/chess-dog-home.html http://localhost:8080/
+          rg --fixed-strings 'Your chess archive, within reach.' /tmp/chess-dog-home.html
+          curl --fail --silent --show-error http://localhost:8080/foundation | rg --fixed-strings 'A foundation you can inspect.'
+          css_path=$(sed -nE 's|.*href="([^"]+\.css)".*|\1|p' /tmp/chess-dog-home.html | head -1)
+          test -n "$css_path"
+          curl --fail --silent --show-error "http://localhost:8080$css_path" --output /tmp/chess-dog.css
+          test -s /tmp/chess-dog.css
+          rg --quiet --fixed-strings 'tailwindcss v4.' /tmp/chess-dog.css
+      - name: Print container logs on failure
+        if: failure()
+        run: docker compose logs --no-color || true
+      - name: Stop application
+        if: always()
+        run: docker compose down --volumes --remove-orphans || true

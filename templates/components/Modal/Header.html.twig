@@ -1,0 +1,8 @@
+<header
+    {{ attributes.defaults({
+        class: 'flex items-center justify-between border-b border-default pb-4 md:pb-5'|tailwind_classes,
+    }) }}
+>
+    {##- The header area, typically contains `Modal:Title` and `Modal:Description`. -#}
+    {%- block content %}{% endblock -%}
+</header>
