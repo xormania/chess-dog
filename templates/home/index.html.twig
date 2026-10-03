@@ -1,0 +1,41 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Chess Dog · A home for your game{% endblock %}
+
+{% block body %}
+    <div class="page-width">
+        <section class="home-hero" aria-labelledby="home-heading">
+            <div class="hero-copy">
+                <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span>Every game has a story</p>
+                <h1 id="home-heading">Your chess archive, <span>within reach.</span></h1>
+                <p class="hero-description">A considered place to explore the games you play. Chess Dog brings a web interface to chess-crawl’s collection and archive.</p>
+                <a href="{{ path('app_foundation') }}" class="primary-link">Explore the foundation <span aria-hidden="true">↗</span></a>
+                <p class="hero-footnote"><span class="status-dot" aria-hidden="true"></span>The application foundation is ready to explore.</p>
+            </div>
+            <div class="hero-art" aria-hidden="true">
+                <div class="art-heading"><span>CHESS DOG</span><span>01 / FOUNDATION</span></div>
+                <div class="decorative-board">
+                    {% for row in 0..7 %}
+                        {% for column in 0..7 %}
+                            <span class="board-square{% if (row + column) is odd %} board-square-shaded{% endif %}"></span>
+                        {% endfor %}
+                    {% endfor %}
+                    <div class="board-emblem">{% include 'components/App/Mark.html.twig' with {size: 'hero-mark'} only %}</div>
+                </div>
+                <div class="art-caption"><span>A home for your game.</span><span class="art-arrow">↗</span></div>
+            </div>
+        </section>
+
+        <section class="foundation-overview" aria-labelledby="overview-heading">
+            <div class="section-heading">
+                <div><p class="eyebrow">A clear starting position</p><h2 id="overview-heading">Built to grow, one move at a time.</h2></div>
+                <p>The first step is a working application shell.</p>
+            </div>
+            <div class="overview-grid">
+                <article class="overview-card"><span class="card-number">01</span><h3>A proper web application</h3><p>Responsive pages, accessible controls and navigation that keeps its place.</p><span class="card-state">Ready to explore</span></article>
+                <article class="overview-card"><span class="card-number">02</span><h3>Interaction with purpose</h3><p>Try a provider and player preview. The interface updates as you make a choice.</p><a href="{{ path('app_foundation') }}#archive-preview" class="text-link">Try the preview <span aria-hidden="true">→</span></a></article>
+                <article class="overview-card"><span class="card-number">03</span><h3>One archive, two applications</h3><p>Chess-crawl collects and preserves games. Chess Dog will make that archive approachable.</p><span class="card-state card-state-muted">Connection comes next</span></article>
+            </div>
+        </section>
+    </div>
+{% endblock %}

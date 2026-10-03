@@ -1,0 +1,50 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Foundation · Chess Dog{% endblock %}
+
+{% block metadata %}
+    <meta name="turbo-cache-control" content="no-cache">
+{% endblock %}
+
+{% block body %}
+    <div class="page-width foundation-page">
+        <div class="foundation-heading">
+            <div><p class="eyebrow">Chess Dog / First position</p><h1>A foundation you can inspect.</h1><p>Explore the application shell and its first interactive component.</p></div>
+            <span class="foundation-badge"><span class="status-dot" aria-hidden="true"></span>Foundation build</span>
+        </div>
+
+        <div class="foundation-grid">
+            <section aria-labelledby="preview-heading" class="preview-panel" id="archive-preview">
+                <div class="panel-heading"><div><p class="eyebrow">An interaction, end to end</p><h2 id="preview-heading">Find your starting point.</h2></div><span class="step-label">01</span></div>
+                <p class="panel-description">Choose a provider and enter a player name to build a local preview.</p>
+                <twig:ArchivePreview />
+                <div class="preview-explanation">
+                    <twig:Modal id="preview_help">
+                        <twig:Modal:Trigger>
+                            <twig:Button variant="ghost" type="button" class="text-link gap-3 p-0 text-xs font-semibold shadow-none hover:bg-transparent" data-testid="modal-open" {{ ...modal_trigger_attrs }}>How this preview works <span aria-hidden="true">↗</span></twig:Button>
+                        </twig:Modal:Trigger>
+                        <twig:Modal:Content class="max-w-lg" data-testid="modal-dialog">
+                            <twig:Modal:Header><twig:Modal:Title>A small, working interaction.</twig:Modal:Title></twig:Modal:Header>
+                            <twig:Modal:Body>
+                                <p>Changing the provider or player updates this component through Symfony Live Components. The preview state stays within Chess Dog.</p>
+                                <p>No request is sent to chess-crawl. This preview does not collect games or start an import.</p>
+                                <p>Use Escape or the close button to return to the page.</p>
+                            </twig:Modal:Body>
+                        </twig:Modal:Content>
+                    </twig:Modal>
+                </div>
+            </section>
+
+            <aside class="foundation-details" aria-labelledby="details-heading">
+                <div class="details-heading"><p class="eyebrow">Under the surface</p><h2 id="details-heading">A focused foundation.</h2></div>
+                <dl class="stack-list">
+                    <div><dt><span class="stack-letter">L</span>Live Components</dt><dd>PHP and Twig drive the preview’s changing state.</dd></div>
+                    <div><dt><span class="stack-letter">A</span>AssetMapper</dt><dd>Versioned CSS and JavaScript, served through import maps.</dd></div>
+                    <div><dt><span class="stack-letter">S</span>Stimulus</dt><dd>Small, accessible interactions that follow the page lifecycle.</dd></div>
+                    <div><dt><span class="stack-letter">T</span>Turbo</dt><dd>Navigation between server-rendered pages without a full reload.</dd></div>
+                </dl>
+                <div class="connection-note"><span class="connection-note-mark" aria-hidden="true">↗</span><div><h3>The archive is next.</h3><p>Chess-crawl integration is pending. There is no archive data in this build.</p></div></div>
+            </aside>
+        </div>
+    </div>
+{% endblock %}

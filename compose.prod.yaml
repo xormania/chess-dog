@@ -1,0 +1,21 @@
+---
+# Production environment override
+services:
+  php:
+    image: ${IMAGES_PREFIX:-}app-php-prod
+    build:
+      context: .
+      target: frankenphp_prod
+    # Development writes Caddy storage as root; production runs as www-data.
+    # Separate retained volumes keep certificates readable in each runtime.
+    volumes:
+      - caddy_data_prod:/data
+      - caddy_config_prod:/config
+    environment:
+      APP_SECRET: ${APP_SECRET}
+      MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
+      MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
+
+volumes:
+  caddy_data_prod:
+  caddy_config_prod:
