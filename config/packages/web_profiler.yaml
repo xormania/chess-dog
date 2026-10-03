@@ -3,9 +3,11 @@ when@dev:
         toolbar: true
 
     framework:
-        profiler: true
+        profiler:
+            dsn: 'file:%kernel.project_dir%/var/profiler/%kernel.environment%'
 
 when@test:
     framework:
         profiler:
             collect: false
+            dsn: 'file:%kernel.project_dir%/var/profiler/%kernel.environment%'

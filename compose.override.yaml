@@ -1,20 +1,40 @@
 ---
 # Development environment override
+x-development: &development
+  image: ${IMAGES_PREFIX:-}app-php-dev
+  build:
+    context: .
+    target: frankenphp_dev
+    args:
+      LOCAL_UID: ${LOCAL_UID:-1000}
+      LOCAL_GID: ${LOCAL_GID:-1000}
+
 services:
+  caddy-storage:
+    <<: *development
+    # Older development containers wrote these retained volumes as root.
+    # Migrate only Caddy storage; this service never mounts the source tree.
+    user: root
+    entrypoint: ["/bin/sh", "-euc"]
+    command:
+      - |
+        mkdir -p /data/caddy /config/caddy
+        chown -R "$$(id -u nonroot):$$(id -g nonroot)" /data/caddy /config/caddy
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      disable: true
   php:
-    image: ${IMAGES_PREFIX:-}app-php-dev
-    build:
-      context: .
-      target: frankenphp_dev
+    <<: *development
+    depends_on:
+      caddy-storage:
+        condition: service_completed_successfully
     volumes:
       - ./:/app
       - ./frankenphp/Caddyfile:/etc/frankenphp/Caddyfile:ro
       - ./frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
-      # Keep var/ off the bind-mount for faster I/O on Mac/Windows; comment to inspect from the host.
-      - app_var:/app/var
-      # If you develop on Mac or Windows you can remove the vendor/ directory
-      #  from the bind-mount for better performance by enabling the next line:
-      #- /app/vendor
+      # var/ and vendor/ remain visible to native tools through the project mount.
     environment:
       FRANKENPHP_WORKER_CONFIG: watch
       FRANKENPHP_SITE_CONFIG: hot_reload
@@ -22,15 +42,13 @@ services:
       # See https://xdebug.org/docs/all_settings#mode
       XDEBUG_MODE: "${XDEBUG_MODE:-develop}"
       APP_ENV: "${APP_ENV:-dev}"
+      APP_CACHE_DIR: /app/var/cache/docker
     extra_hosts:
       # Ensure that host.docker.internal is correctly defined on Linux
       - host.docker.internal:host-gateway
     tty: true
   tailwind:
-    image: ${IMAGES_PREFIX:-}app-php-dev
-    build:
-      context: .
-      target: frankenphp_dev
+    <<: *development
     restart: unless-stopped
     command: ["php", "bin/console", "tailwind:build", "--watch"]
     depends_on:
@@ -38,11 +56,11 @@ services:
         condition: service_healthy
     environment:
       APP_ENV: dev
+      APP_CACHE_DIR: /app/var/cache/docker
       XDEBUG_MODE: "off"
     volumes:
       - ./:/app
-      # The HTTP process and CSS watcher must see the same compiled CSS.
-      - app_var:/app/var
+      # PHP, the watcher and host tools all see the same local var/ directory.
     healthcheck:
       test: ["CMD-SHELL", "test -s /app/var/tailwind/app.built.css"]
       interval: 5s
@@ -51,7 +69,5 @@ services:
       start_period: 10s
     tty: true
 
-volumes:
-  app_var:
 ###> symfony/mercure-bundle ###
 ###< symfony/mercure-bundle ###
