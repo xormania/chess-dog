@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -47,7 +51,7 @@ jobs:
           composer install --prefer-dist --no-interaction --no-progress
       - name: Validate PHP, Symfony configuration, and templates
         run: |
-          rg --files src tests -g '*.php' -0 | xargs -0 -n 1 php -l
+          find src tests -type f -name '*.php' -print0 | xargs -0 -r -n 1 php -l
           php bin/console lint:yaml config --parse-tags
           php bin/console lint:twig templates
           php bin/console lint:container --resolve-env-vars
@@ -129,13 +133,14 @@ jobs:
       - name: Check rendered pages and styles over HTTP
         run: |
           curl --fail --silent --show-error --retry 20 --retry-all-errors --retry-delay 2 --output /tmp/chess-dog-home.html http://localhost:8080/
-          rg --fixed-strings 'Your chess archive, within reach.' /tmp/chess-dog-home.html
-          curl --fail --silent --show-error http://localhost:8080/foundation | rg --fixed-strings 'A foundation you can inspect.'
+          grep --quiet --fixed-strings 'Your chess archive, within reach.' /tmp/chess-dog-home.html
+          curl --fail --silent --show-error --output /tmp/chess-dog-foundation.html http://localhost:8080/foundation
+          grep --quiet --fixed-strings 'A foundation you can inspect.' /tmp/chess-dog-foundation.html
           css_path=$(sed -nE 's|.*href="([^"]+\.css)".*|\1|p' /tmp/chess-dog-home.html | head -1)
           test -n "$css_path"
           curl --fail --silent --show-error "http://localhost:8080$css_path" --output /tmp/chess-dog.css
           test -s /tmp/chess-dog.css
-          rg --quiet --fixed-strings 'tailwindcss v4.' /tmp/chess-dog.css
+          grep --quiet --fixed-strings 'tailwindcss v4.' /tmp/chess-dog.css
       - name: Print container logs on failure
         if: failure()
         run: docker compose logs --no-color || true
