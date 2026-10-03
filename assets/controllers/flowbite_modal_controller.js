@@ -11,6 +11,8 @@ export default class extends Controller {
         this.element.dataset.modalConnected = 'true';
         if (this.openValue) {
             this.open();
+        } else {
+            this.syncState();
         }
     }
 
@@ -21,17 +23,12 @@ export default class extends Controller {
     beforeCache() {
         // Turbo snapshots clone markup, so preserve the closed, unconnected state.
         delete this.element.dataset.modalConnected;
-        if (this.modalTarget.open) {
-            this.close();
-        }
+        this.close();
     }
 
     open() {
         this.modalTarget.showModal();
-        this.modalTarget.setAttribute('aria-hidden', 'false');
-        if (this.hasTriggerTarget) {
-            this.triggerTarget.setAttribute('aria-expanded', 'true');
-        }
+        this.syncState();
     }
 
     closeOnClickOutside({ target, clientX, clientY }) {
@@ -48,9 +45,15 @@ export default class extends Controller {
 
     close() {
         this.modalTarget.close();
-        this.modalTarget.setAttribute('aria-hidden', 'true');
+        this.syncState();
+    }
+
+    syncState() {
+        // A queued native close event may arrive after the dialog has reopened.
+        const isOpen = this.modalTarget.open;
+        this.modalTarget.setAttribute('aria-hidden', String(!isOpen));
         if (this.hasTriggerTarget) {
-            this.triggerTarget.setAttribute('aria-expanded', 'false');
+            this.triggerTarget.setAttribute('aria-expanded', String(isOpen));
         }
     }
 }

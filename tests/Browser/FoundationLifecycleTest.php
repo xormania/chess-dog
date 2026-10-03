@@ -14,6 +14,85 @@ use Symfony\Component\Panther\PantherTestCase;
 
 final class FoundationLifecycleTest extends PantherTestCase
 {
+    public function testNativeNavigationBackStartsAConsistentFreshPreview(): void
+    {
+        $client = self::createPantherClient();
+        $client->request('GET', '/foundation');
+        $client->waitFor('[data-controller~="flowbite-modal"][data-modal-connected="true"]');
+
+        $provider = new WebDriverSelect($client->findElement(WebDriverBy::cssSelector('[data-testid="provider-input"]')));
+        $provider->selectByValue('lichess');
+        $client->findElement(WebDriverBy::cssSelector('[data-testid="player-input"]'))->sendKeys('previous-player');
+        $client->waitForElementToContain('[data-testid="preview-summary"]', 'Lichess / previous-player');
+        $client->executeScript('window.__nativeHistoryDocument = "before-navigation";');
+
+        // WebDriver navigation loads a document, bypassing Turbo's link handling.
+        $homeUrl = $client->executeScript('return document.querySelector("nav[aria-label=\"Main navigation\"] a[href=\"/\"]").href;');
+        $client->getWebDriver()->get($homeUrl);
+        $client->waitForElementToContain('h1', 'Your chess archive, within reach.');
+        self::assertNull($client->executeScript('return window.__nativeHistoryDocument ?? null;'));
+
+        $client->back();
+        $client->waitFor('[data-controller~="flowbite-modal"][data-modal-connected="true"]');
+        self::assertSame('', $client->findElement(WebDriverBy::cssSelector('[data-testid="player-input"]'))->getAttribute('value'));
+        self::assertSame('chesscom', $client->findElement(WebDriverBy::cssSelector('[data-testid="provider-input"]'))->getAttribute('value'));
+        self::assertSelectorTextContains('[data-testid="preview-summary"]', 'Choose a player to build the preview.');
+
+        // The restored select and the signed Live state must agree on the next edit.
+        $client->findElement(WebDriverBy::cssSelector('[data-testid="player-input"]'))->sendKeys('next-player');
+        $client->waitForElementToContain('[data-testid="preview-summary"]', 'Chess.com / next-player');
+        self::assertSame('chesscom', $client->findElement(WebDriverBy::cssSelector('[data-testid="provider-input"]'))->getAttribute('value'));
+    }
+
+    public function testNativeDialogCancellationAndCloseSynchronizeAccessibleState(): void
+    {
+        $client = self::createPantherClient();
+        $client->request('GET', '/foundation');
+        $client->waitFor('[data-controller~="flowbite-modal"][data-modal-connected="true"]');
+        $client->executeScript(<<<'JS'
+            window.__nativeDialogCancellations = [];
+            document.querySelector('[data-testid="modal-dialog"]').addEventListener('cancel', event => {
+                window.__nativeDialogCancellations.push(event.isTrusted);
+            });
+            JS);
+
+        $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-open"]'))->click();
+        $client->waitForVisibility('[data-testid="modal-dialog"]');
+        self::assertSame('false', $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-dialog"]'))->getAttribute('aria-hidden'));
+        self::assertSame('true', $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-open"]'))->getAttribute('aria-expanded'));
+        $client->getKeyboard()->pressKey(WebDriverKeys::TAB);
+        $client->getKeyboard()->pressKey(WebDriverKeys::ESCAPE);
+        $client->waitForInvisibility('[data-testid="modal-dialog"]');
+        self::assertSame([true], $client->executeScript('return window.__nativeDialogCancellations;'), 'Escape must exercise the trusted native cancel event.');
+        $this->assertClosedDialogState($client);
+        self::assertSame('modal-open', $client->executeScript('return document.activeElement.dataset.testid;'));
+
+        // Closing through the native API must synchronize after the close event.
+        $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-open"]'))->click();
+        $client->waitForVisibility('[data-testid="modal-dialog"]');
+        $client->executeScript('document.querySelector("[data-testid=modal-dialog]").close();');
+        $client->waitForAttributeToContain('[data-testid="modal-dialog"]', 'aria-hidden', 'true');
+        $this->assertClosedDialogState($client);
+
+        // A queued close event must not mark an immediately reopened dialog closed.
+        $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-open"]'))->click();
+        $client->waitForVisibility('[data-testid="modal-dialog"]');
+        $client->executeScript(<<<'JS'
+            window.__nativeDialogCloseObserved = false;
+            const dialog = document.querySelector('[data-testid="modal-dialog"]');
+            dialog.addEventListener('close', () => { window.__nativeDialogCloseObserved = true; }, { once: true });
+            dialog.close();
+            dialog.showModal();
+            JS);
+        $client->wait()->until(fn () => $client->executeScript('return window.__nativeDialogCloseObserved;'));
+        self::assertTrue($client->executeScript('return document.querySelector("[data-testid=modal-dialog]").open;'));
+        self::assertSame('false', $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-dialog"]'))->getAttribute('aria-hidden'));
+        self::assertSame('true', $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-open"]'))->getAttribute('aria-expanded'));
+        $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-close"]'))->click();
+        $client->waitForInvisibility('[data-testid="modal-dialog"]');
+        $this->assertClosedDialogState($client);
+    }
+
     public function testLiveUpdatesAndDialogSurviveTurboNavigationAndBack(): void
     {
         $client = self::createPantherClient();
@@ -72,6 +151,8 @@ final class FoundationLifecycleTest extends PantherTestCase
         $client->waitForElementToContain('[data-testid="preview-summary"]', 'Chess.com / magnus');
 
         $client->manage()->window()->setSize(new WebDriverDimension(320, 900));
+        // WebDriver can return from resize before Chrome paints the responsive layout.
+        $client->getWebDriver()->executeAsyncScript('const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));');
         $this->assertSmallScreenHeader($client);
         $this->assertSmallScreenDialogTitle($client);
         $client->getCrawler()->filter('nav[aria-label="Main navigation"] a[href="/"]')->click();
@@ -88,6 +169,12 @@ final class FoundationLifecycleTest extends PantherTestCase
         $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-close"]'))->click();
         $client->waitForInvisibility('[data-testid="modal-dialog"]');
         self::assertSame('modal-open', $client->executeScript('return document.activeElement.dataset.testid;'));
+    }
+
+    private function assertClosedDialogState(Client $client): void
+    {
+        self::assertSame('true', $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-dialog"]'))->getAttribute('aria-hidden'));
+        self::assertSame('false', $client->findElement(WebDriverBy::cssSelector('[data-testid="modal-open"]'))->getAttribute('aria-expanded'));
     }
 
     private function assertDialogPaddingAndBackdropClicks(Client $client): void

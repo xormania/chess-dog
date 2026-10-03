@@ -55,7 +55,8 @@ jobs:
     needs: changes
     # Required checks must remain present, even for docs-only PRs or a failed
     # classifier. A failed classifier must fail these checks, never skip them.
-    if: ${{ always() }}
+    # Superseded runs must still cancel their expensive work.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -171,7 +172,7 @@ jobs:
   docker:
     name: Docker / ${{ matrix.name }}
     needs: changes
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -268,6 +269,13 @@ jobs:
         run: |
           docker compose config --quiet
           docker compose up --no-build --wait --wait-timeout 120
+      - name: Verify HTTP redirects to the published HTTPS port
+        if: needs.changes.outputs.run_checks == 'true'
+        run: |
+          for method in GET POST; do
+            redirect=$(curl --fail --silent --show-error --request "$method" --output /dev/null --write-out '%{http_code} %{redirect_url}' 'http://localhost:8080/foundation?provider=lichess&player=xor%20test')
+            test "$redirect" = '308 https://localhost:8443/foundation?provider=lichess&player=xor%20test'
+          done
       - name: Verify development Mate capabilities
         if: needs.changes.outputs.run_checks == 'true' && matrix.name == 'development'
         run: |

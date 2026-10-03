@@ -49,6 +49,10 @@ HTTP_PORT=8080 HTTPS_PORT=8443 HTTP3_PORT=8443 docker compose up --build --wait
 ```
 
 Then open [https://localhost:8443](https://localhost:8443).
+HTTP requests on port 8080 redirect to that HTTPS port, preserving the path and query.
+With a custom HTTPS port, recreate PHP after changing Caddy routes or global
+options so startup can check the redirect configuration again. Use the same port
+variables with `docker compose up --force-recreate --wait php`.
 
 After pulling a change to the dependency lock file, install it explicitly:
 

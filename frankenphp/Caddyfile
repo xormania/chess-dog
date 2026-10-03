@@ -1,7 +1,8 @@
 {
 	skip_install_trust
-
 	{$CADDY_GLOBAL_OPTIONS}
+	# Nonstandard ports preserve configured certificate flags in this derived option.
+	{$CADDY_HTTP_REDIRECT_OPTIONS}
 
 	frankenphp {
 		{$FRANKENPHP_CONFIG}
@@ -61,3 +62,6 @@
 		hide *.php
 	}
 }
+
+# Derived by the entrypoint; explicit HTTP catch-all deployments keep their routes.
+{$CADDY_HTTP_REDIRECT_CONFIG}
