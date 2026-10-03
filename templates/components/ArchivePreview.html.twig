@@ -1,0 +1,25 @@
+<div {{ attributes }} data-testid="archive-preview">
+    <div class="preview-fields">
+        <div class="preview-field">
+            <label for="preview-provider" class="field-label">Provider</label>
+            <select id="preview-provider" name="provider" class="preview-select" data-model="on(change)|provider" data-testid="provider-input">
+                <option value="chesscom"{% if provider == 'chesscom' %} selected{% endif %}>Chess.com</option>
+                <option value="lichess"{% if provider == 'lichess' %} selected{% endif %}>Lichess</option>
+            </select>
+        </div>
+        <div class="preview-field">
+            <label for="preview-player" class="field-label">Player</label>
+            <twig:Input id="preview-player" name="player" placeholder="Enter a player name" autocomplete="off" data-model="player" data-testid="player-input" aria-describedby="preview-input-help" />
+        </div>
+    </div>
+    <p class="field-help" id="preview-input-help">This builds a preview; it does not validate the account or fetch games.</p>
+    <div class="preview-result" aria-live="polite" aria-atomic="true">
+        <span class="result-icon" aria-hidden="true">↗</span>
+        <div><p class="result-label">Your starting point</p><p class="result-summary" data-testid="preview-summary">{{ this.summary }}</p></div>
+    </div>
+    <div class="preview-actions">
+        <span class="preview-status" data-testid="preview-status"><span class="status-dot" aria-hidden="true"></span>Preview only</span>
+        <twig:Button variant="outline" type="button" data-action="live#action" data-live-action-param="reset" data-testid="preview-reset">Reset preview</twig:Button>
+    </div>
+    <span class="live-progress" data-loading="show" role="status">Updating preview…</span>
+</div>

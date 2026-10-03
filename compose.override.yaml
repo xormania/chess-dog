@@ -1,0 +1,57 @@
+---
+# Development environment override
+services:
+  php:
+    image: ${IMAGES_PREFIX:-}app-php-dev
+    build:
+      context: .
+      target: frankenphp_dev
+    volumes:
+      - ./:/app
+      - ./frankenphp/Caddyfile:/etc/frankenphp/Caddyfile:ro
+      - ./frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
+      # Keep var/ off the bind-mount for faster I/O on Mac/Windows; comment to inspect from the host.
+      - app_var:/app/var
+      # If you develop on Mac or Windows you can remove the vendor/ directory
+      #  from the bind-mount for better performance by enabling the next line:
+      #- /app/vendor
+    environment:
+      FRANKENPHP_WORKER_CONFIG: watch
+      FRANKENPHP_SITE_CONFIG: hot_reload
+      MERCURE_EXTRA_DIRECTIVES: demo
+      # See https://xdebug.org/docs/all_settings#mode
+      XDEBUG_MODE: "${XDEBUG_MODE:-develop}"
+      APP_ENV: "${APP_ENV:-dev}"
+    extra_hosts:
+      # Ensure that host.docker.internal is correctly defined on Linux
+      - host.docker.internal:host-gateway
+    tty: true
+  tailwind:
+    image: ${IMAGES_PREFIX:-}app-php-dev
+    build:
+      context: .
+      target: frankenphp_dev
+    restart: unless-stopped
+    command: ["php", "bin/console", "tailwind:build", "--watch"]
+    depends_on:
+      php:
+        condition: service_healthy
+    environment:
+      APP_ENV: dev
+      XDEBUG_MODE: "off"
+    volumes:
+      - ./:/app
+      # The HTTP process and CSS watcher must see the same compiled CSS.
+      - app_var:/app/var
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /app/var/tailwind/app.built.css"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    tty: true
+
+volumes:
+  app_var:
+###> symfony/mercure-bundle ###
+###< symfony/mercure-bundle ###

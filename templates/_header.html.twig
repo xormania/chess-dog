@@ -1,0 +1,14 @@
+{% set current_route = app.request.attributes.get('_route') %}
+<header class="site-header">
+    <div class="page-width header-inner">
+        <a href="{{ path('app_home') }}" class="brand" aria-label="Chess Dog home">
+            {% include 'components/App/Mark.html.twig' with {size: 'brand-mark'} only %}
+            <span>Chess Dog<span class="brand-caption">A home for your game.</span></span>
+        </a>
+        <nav aria-label="Main navigation" class="main-nav">
+            <a href="{{ path('app_home') }}" class="nav-link"{% if current_route == 'app_home' %} aria-current="page"{% endif %}>Home</a>
+            <a href="{{ path('app_foundation') }}" class="nav-link"{% if current_route == 'app_foundation' %} aria-current="page"{% endif %}>Foundation</a>
+        </nav>
+        <span class="header-note"><span class="status-dot" aria-hidden="true"></span>Foundation build</span>
+    </div>
+</header>

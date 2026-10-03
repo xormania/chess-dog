@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#274b3b">
+        <meta name="description" content="Chess Dog is a Symfony web application for exploring your chess archive, powered by chess-crawl.">
+        {% block metadata %}{% endblock %}
+        <title>{% block title %}Chess Dog{% endblock %}</title>
+        {% block stylesheets %}{% endblock %}
+        {% block javascripts %}
+            {% block importmap %}{{ importmap('app') }}{% endblock %}
+        {% endblock %}
+    </head>
+    <body class="antialiased">
+        <a href="#main-content" class="skip-link">Skip to content</a>
+        {% include '_header.html.twig' %}
+        <main id="main-content" class="site-main" tabindex="-1">
+            {% block body %}{% endblock %}
+        </main>
+        {% include '_footer.html.twig' %}
+    </body>
+</html>
