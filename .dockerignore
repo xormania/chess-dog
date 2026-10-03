@@ -28,6 +28,7 @@ docs/
 mate/
 public/bundles/
 tests/
+scripts/
 var/
 vendor/
 .editorconfig
