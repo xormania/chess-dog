@@ -26,6 +26,9 @@
 	encode zstd br gzip
 
 	mercure {
+		# SERVER_NAME expands to the public and internal authorities. Reuse one
+		# named hub across both generated Caddy server blocks.
+		name chess-dog
 		# Symfony's current Mercure JWT factory emits the 0.x claim and cookie
 		# format. Keep compatibility explicit until application-issued grants
 		# migrate to Mercure 1.x access tokens and issuer validation.

@@ -187,7 +187,7 @@ jobs:
       HTTPS_PORT: '8443'
       HTTP3_PORT: '8443'
       APP_SECRET: ci-smoke-secret
-      CADDY_MERCURE_JWT_SECRET: ci-only-unused-mercure-key
+      CADDY_MERCURE_JWT_SECRET: ci-only-unused-mercure-key-00000000
     steps:
       - name: Require a valid scope decision
         env:
@@ -258,7 +258,7 @@ jobs:
               with open(filename) as source:
                   config = json.load(source)
               environment = config['services']['php']['environment']
-              expected_secret = 'ci-only-unused-mercure-key'
+              expected_secret = 'ci-only-unused-mercure-key-00000000'
               assert environment['MERCURE_SUBSCRIBER_JWT_KEY'] == expected_secret, 'Hub subscriber key is not configured'
               assert environment['MERCURE_SUBSCRIBER_JWT_SECRET'] == expected_secret, 'Application subscriber key differs from the hub'
               names = set()
