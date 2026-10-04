@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Permit the installed Nix Chromium to use its namespace sandbox on Ubuntu.
+set -euo pipefail
+
+usage() {
+    cat <<'HELP'
+Usage: scripts/configure-chromium-sandbox [--install] [--binary PATH] [--profile-name NAME]
+
+Print an AppArmor user-namespace profile for the exact installed Nix Chromium ELF.
+Run inside Devbox. By default this only prints the proposed profile.
+
+Options:
+  --install           Install/load the profile using sudo when Ubuntu restricts
+                      user namespaces; otherwise report that no change is needed
+  --binary PATH       Explicit Nix Chromium ELF (default: resolve its PATH wrapper)
+  --profile-name NAME  Profile name (default: chess-dog-chromium)
+  -h, --help          Show this help
+
+Run again after updating Chromium if your system needs this profile. It preserves
+Chromium's sandbox and the system-wide AppArmor restrictions. It does not install
+setuid executables or change Nix store permissions.
+HELP
+}
+
+install_profile=false
+browser_binary=''
+profile_name=chess-dog-chromium
+while (($#)); do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --install) install_profile=true; shift ;;
+        --binary|--profile-name)
+            [[ $# -ge 2 && -n $2 ]] || { printf '%s requires a value.\n' "$1" >&2; exit 2; }
+            if [[ $1 == --binary ]]; then browser_binary=$2; else profile_name=$2; fi
+            shift 2
+            ;;
+        *) printf 'Unknown option: %s (see --help).\n' "$1" >&2; exit 2 ;;
+    esac
+done
+[[ "$profile_name" =~ ^[a-zA-Z0-9_-]+$ ]] || { printf 'Invalid profile name.\n' >&2; exit 2; }
+
+if $install_profile && [[ $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || true) != 1 ]]; then
+    printf 'AppArmor does not restrict unprivileged user namespaces; no profile needed.\n'
+    exit 0
+fi
+
+if [[ -z "$browser_binary" ]]; then
+    # The PATH executable is a shell wrapper; AppArmor must attach to its ELF.
+    browser_binary=$(python3 - "$(readlink -f "$(command -v chromium)")" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+wrapper = Path(sys.argv[1]).read_text()
+paths = set(re.findall(r'/nix/store/[a-z0-9]{32}-[A-Za-z0-9+._=-]+/libexec/chromium/chromium', wrapper))
+if len(paths) != 1:
+    sys.exit('Cannot identify one Chromium ELF in its wrapper; pass --binary PATH.')
+print(paths.pop())
+PY
+    )
+fi
+browser_binary=$(readlink -f "$browser_binary")
+[[ "$browser_binary" =~ ^/nix/store/[a-z0-9]{32}-[A-Za-z0-9+._=-]+/libexec/chromium/chromium$ && -x "$browser_binary" ]] || {
+    printf 'Expected the executable Chromium ELF inside the Nix store, got %s.\n' "$browser_binary" >&2
+    exit 2
+}
+[[ $(head -c 4 "$browser_binary") == $'\x7fELF' ]] || { printf 'Not an ELF executable.\n' >&2; exit 2; }
+
+profile=$(cat <<PROFILE
+abi <abi/4.0>,
+include <tunables/global>
+
+profile $profile_name "$browser_binary" flags=(unconfined) {
+  userns,
+}
+PROFILE
+)
+if ! $install_profile; then printf '%s\n' "$profile"; exit 0; fi
+
+parser=$(command -v apparmor_parser) || { printf 'Install your distribution\x27s AppArmor tools first.\n' >&2; exit 1; }
+profile_file=$(mktemp)
+trap 'rm -f -- "$profile_file"' EXIT
+printf '%s\n' "$profile" > "$profile_file"
+root_command=()
+if ((EUID != 0)); then root_command=(sudo); fi
+"${root_command[@]}" "$parser" --skip-kernel-load "$profile_file"
+"${root_command[@]}" install -m 644 "$profile_file" "/etc/apparmor.d/$profile_name"
+"${root_command[@]}" "$parser" -r "/etc/apparmor.d/$profile_name"
+printf 'Loaded %s for %s.\n' "$profile_name" "$browser_binary"

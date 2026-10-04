@@ -108,6 +108,16 @@ requires a reachable daemon. If PHP extensions fail, inspect inherited `PHPRC` o
 `PHP_INI_SCAN_DIR` overrides. Panther uses Devbox's Chromium by default; set
 `PANTHER_CHROME_BINARY` explicitly to test another browser installation.
 
+Ubuntu 23.10+ can block the user namespaces needed by Nix Chromium, causing a
+"No usable sandbox" or SUID-helper startup error. If `check --headless` reports
+that error, run `devbox run -- scripts/configure-chromium-sandbox` to inspect the
+proposed AppArmor profile, then add `--install` to install/load it with sudo.
+The helper allows only the exact installed Chromium executable and preserves its
+sandbox. It does nothing when the kernel restriction is absent; rerun it after a
+Chromium update when needed. `--binary` and `--profile-name` support explicit
+overrides. CI uses this helper on Ubuntu rather than disabling the browser sandbox.
+See [Chromium's explanation](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
+
 `scripts/setup` installs locked PHP packages, checks platform requirements,
 regenerates Mate discovery and builds Tailwind with native tools. Each helper
 supports `--help`; setup options include `--env test`, `--skip-assets`, an optional

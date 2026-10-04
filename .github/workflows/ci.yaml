@@ -83,6 +83,9 @@ jobs:
         with:
           devbox-version: '0.18.4'
           enable-cache: 'true'
+      - name: Allow the installed Chromium namespace sandbox
+        if: needs.changes.outputs.run_checks == 'true'
+        run: devbox run -- scripts/configure-chromium-sandbox --install
       - name: Verify development tools and child runtimes
         if: needs.changes.outputs.run_checks == 'true'
         run: |
