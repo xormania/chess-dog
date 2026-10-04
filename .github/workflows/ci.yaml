@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [dev]
+    branches: [dev, master]
   push:
     branches: [dev, master]
   workflow_dispatch:
@@ -58,7 +58,7 @@ jobs:
     # Superseded runs must still cancel their expensive work.
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       APP_ENV: test
       PANTHER_APP_ENV: test
@@ -77,18 +77,19 @@ jobs:
           esac
       - uses: actions/checkout@v6
         if: needs.changes.outputs.run_checks == 'true'
-      - name: Set up PHP
+      - name: Install the locked Devbox environment
         if: needs.changes.outputs.run_checks == 'true'
-        uses: shivammathur/setup-php@v2
+        uses: jetify-com/devbox-install-action@8c6a66ed6273138b1915457069de78cb52fe3bd7 # v0.15.0
         with:
-          php-version: '8.5'
-          extensions: intl, mbstring, pdo_sqlite, zip
-          tools: composer:v2
-          coverage: none
+          devbox-version: '0.18.4'
+          enable-cache: 'true'
+      - name: Verify development tools and child runtimes
+        if: needs.changes.outputs.run_checks == 'true'
+        run: devbox run check
       - name: Locate Composer download cache
         if: needs.changes.outputs.run_checks == 'true'
         id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+        run: echo "dir=$(devbox run -- composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
       - name: Cache Composer downloads
         if: needs.changes.outputs.run_checks == 'true'
         uses: actions/cache@v6
@@ -99,15 +100,15 @@ jobs:
       - name: Install locked dependencies
         if: needs.changes.outputs.run_checks == 'true'
         run: |
-          composer validate --strict
-          composer install --prefer-dist --no-interaction --no-progress
+          devbox run -- composer validate --strict
+          devbox run setup --env test --skip-assets -- --prefer-dist --no-interaction --no-progress
       - name: Validate PHP, Symfony configuration, and templates
         if: needs.changes.outputs.run_checks == 'true'
         run: |
-          git ls-files -z -- '*.php' bin/console | xargs -0 -r -n 1 php -l
-          php bin/console lint:yaml config --parse-tags
-          php bin/console lint:twig templates
-          php bin/console lint:container --resolve-env-vars
+          devbox run -- bash -c 'git ls-files -z -- "*.php" bin/console | xargs -0 -r -n 1 php -l'
+          devbox run -- php bin/console lint:yaml config --parse-tags
+          devbox run -- php bin/console lint:twig templates
+          devbox run -- php bin/console lint:container --resolve-env-vars
       - name: Cache the pinned Tailwind executable
         if: needs.changes.outputs.run_checks == 'true'
         uses: actions/cache@v6
@@ -118,45 +119,16 @@ jobs:
       - name: Compile browser assets
         if: needs.changes.outputs.run_checks == 'true'
         run: |
-          php bin/console tailwind:build --minify
-          php bin/console asset-map:compile
-      - name: Identify the installed Chrome version
-        if: needs.changes.outputs.run_checks == 'true'
-        id: chrome
-        run: |
-          version=$(google-chrome --product-version)
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-      - name: Cache the matching Chrome driver
-        if: needs.changes.outputs.run_checks == 'true'
-        id: chrome-driver
-        uses: actions/cache@v6
-        with:
-          path: drivers/chromedriver
-          key: ${{ runner.os }}-${{ runner.arch }}-chromedriver-${{ steps.chrome.outputs.version }}-${{ hashFiles('composer.lock') }}
-      - name: Prepare the matching Chrome driver
-        if: needs.changes.outputs.run_checks == 'true' && steps.chrome-driver.outputs.cache-hit != 'true'
-        env:
-          CHROME_VERSION: ${{ steps.chrome.outputs.version }}
-        run: |
-          driver_path=$(command -v chromedriver || true)
-          driver_version=''
-          if [[ -n "$driver_path" ]]; then
-            if ! driver_version=$("$driver_path" --version 2>/dev/null); then
-              driver_version=''
-            fi
-          fi
-          if [[ "$driver_version" == "ChromeDriver $CHROME_VERSION "* ]]; then
-            mkdir -p drivers
-            cp "$driver_path" drivers/chromedriver
-          else
-            # Download only the browser used by Panther, rather than unrelated
-            # Firefox/Chromium drivers, when the runner has no exact match.
-            vendor/bin/bdi browser:google-chrome drivers
-          fi
+          devbox run -- php bin/console tailwind:build --minify
+          devbox run -- php bin/console asset-map:compile
       - name: Run application and browser tests
         if: needs.changes.outputs.run_checks == 'true'
-        run: vendor/bin/phpunit --log-junit var/test-results.xml
+        run: devbox run test --log-junit var/test-results.xml
+      - name: Verify package locks remain unchanged
+        if: needs.changes.outputs.run_checks == 'true'
+        run: |
+          git ls-files --error-unmatch devbox.lock
+          git diff --exit-code -- devbox.json devbox.lock composer.lock
       - name: Upload test failure evidence
         if: failure()
         uses: actions/upload-artifact@v7
@@ -166,6 +138,7 @@ jobs:
             var/error-screenshots/
             var/log/test.log
             var/test-results.xml
+            devbox.lock
           retention-days: 7
           if-no-files-found: ignore
 

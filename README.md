@@ -13,7 +13,7 @@ page cache; its provider selection and Live state remain consistent.
 
 | Layer | Implementation |
 | --- | --- |
-| Application | Symfony 8.1, PHP 8.5 in Docker, Composer and Symfony Flex |
+| Application | Symfony 8.1, PHP 8.5, Composer and Symfony Flex |
 | Runtime | Symfony Docker with FrankenPHP and Caddy |
 | Rendering | Twig and Symfony UX Twig Components |
 | LAST | Live Components, AssetMapper, Stimulus and Turbo |
@@ -28,17 +28,48 @@ JavaScript bundler.
 
 ## Local tools
 
-Use native PHP and Composer for everyday commands. Install PHP **8.5** and
-Composer 2 in the same Linux/WSL environment as the checkout. Composer installs
-project packages, including Mate, PHPUnit, Panther and the browser-driver
-installer, into `vendor/`; there is no virtual-environment activation step.
+Use [Devbox](https://www.jetify.com/docs/devbox/installing-devbox) to install the
+native development tools together. The checked-in `devbox.json` declares the
+packages and `devbox.lock` pins their resolved versions. This environment targets
+Linux/WSL2; run it inside the same WSL distribution as the checkout.
+
+Install Devbox once as your regular Linux/WSL user (CI tests Devbox **0.18.4**):
+
+```bash
+curl -fsSL https://get.jetify.com/devbox | bash
+```
+
+Devbox installs Nix if needed when you first use the environment. It then supplies:
+
+| Capability | Packages |
+| --- | --- |
+| Application runtime | PHP 8.5 with required extensions; Composer 2 built for PHP 8.5 |
+| Native web server | Symfony CLI |
+| Browser tests | Chromium and matching ChromeDriver |
+| Optional container commands | Docker client with Compose and Buildx |
+| Scripts and diagnostics | Bash, coreutils, curl, Git, Python 3, unzip, grep, sed, awk, findutils and ripgrep |
+
+Composer still installs project packages (Mate, Maker, PHPUnit, Panther and BDI)
+into `vendor/`. `scripts/setup` installs locked importmap assets and builds the
+project's pinned standalone Tailwind executable. No Node.js installation is needed.
+The stock Nix PHP package supplies the extensions; Devbox's PHP/FPM plugin is
+disabled so it does not generate a second runtime/configuration.
+
+Docker Desktop (with WSL integration) or another Docker daemon is only needed for
+the optional container workflow. Devbox supplies the client commands and preserves
+your Docker connection/context; it does not install or start a daemon. Native
+Symfony serving, Mate, asset compilation and tests work without a Docker daemon.
+
+If you already manage your tools yourself, install PHP **8.5** and Composer 2 in
+the same Linux/WSL environment and use the same `scripts/setup` entrypoint.
 
 The locked packages require PHP's ctype, curl, DOM/XML, iconv, mbstring, tokenizer,
 zip and standard bundled extensions. Install intl for parity with Docker and
 pdo_sqlite for the current optional Doctrine configuration. `composer
 check-platform-reqs` checks the complete dependency requirements on your runtime.
 
-The [Symfony CLI](https://symfony.com/download) is optional. The checked-in
+The [Symfony CLI](https://symfony.com/download) is included in Devbox and optional
+for manually installed tools. The checked-in
 `.php-version` selects PHP 8.5 for `symfony php`, `symfony composer` and Symfony's
 local server, **if PHP 8.5 is already installed**. It does not change plain `php`
 on your shell's PATH. Verify `php -v` before running native commands.
@@ -53,14 +84,38 @@ environment; the Windows browser is not the Linux Panther browser.
 ```bash
 git clone --branch dev https://github.com/xormania/chess-dog.git
 cd chess-dog
+devbox shell
+scripts/check-devbox
 scripts/setup
-scripts/compose up --build --wait --wait-timeout 120
+symfony server:start
 ```
+
+Open the URL printed by Symfony. For live stylesheet updates, run
+`devbox run watch` in another terminal. Each new terminal can enter `devbox shell`;
+`exit` leaves the environment. For individual commands, use `devbox run -- php
+bin/console about`, or the `setup`, `check`, `test`, `serve` and `watch` aliases.
+For example, `devbox run setup --env test --skip-assets -- --no-interaction` forwards
+options to the existing setup helper; `devbox run test --filter RuntimeStorageTest`
+forwards PHPUnit options. Starting a shell does not install project dependencies,
+start servers, or change Symfony's `APP_ENV`/cache settings.
+
+`scripts/check-devbox` verifies tool provenance, PHP/Composer versions, required
+extensions (including child PHP processes), Symfony's PHP selection, matching
+browser/driver versions and Docker client plugins. `--with-docker` additionally
+requires a reachable daemon. If PHP extensions fail, inspect inherited `PHPRC` or
+`PHP_INI_SCAN_DIR` overrides. Panther uses Devbox's Chromium by default; set
+`PANTHER_CHROME_BINARY` explicitly to test another browser installation.
 
 `scripts/setup` installs locked PHP packages, checks platform requirements,
 regenerates Mate discovery and builds Tailwind with native tools. Each helper
 supports `--help`; setup options include `--env test`, `--skip-assets`, an optional
 `--browser google-chrome` driver install, and Composer install arguments after `--`.
+
+For the optional Docker runtime, stop the native server and watcher, then run:
+
+```bash
+scripts/compose up --build --wait --wait-timeout 120
+```
 
 `scripts/compose` forwards normal Docker Compose arguments and supplies your
 current UID/GID as development-image build arguments. Both PHP and Tailwind run
@@ -185,8 +240,10 @@ php bin/console lint:container --resolve-env-vars
 vendor/bin/phpunit tests/Functional
 ```
 
-For the browser suite, install a browser and matching driver (for example,
-`scripts/setup --browser google-chrome`), then run `vendor/bin/phpunit`. Tests cover
+Inside Devbox, run `devbox run test` or `vendor/bin/phpunit` in its shell; Chromium
+and ChromeDriver are already installed and no BDI download is needed. With manually
+installed tools, install a browser and matching driver (for example,
+`scripts/setup --browser google-chrome`) before running `vendor/bin/phpunit`. Tests cover
 Live updates, dialogs, Turbo/native history, responsive layouts, and actual cache
 clearing across runtime contexts. The application Docker image does not contain
 a browser.
@@ -211,10 +268,19 @@ ownership. It defaults to `0:0` and `33:33`; pass other `UID:GID` pairs or use
 CI validates both Docker configurations over trusted HTTPS. Development checks
 also seed legacy root-owned Caddy storage, verify ownership migration and run the
 native/shared-storage helper under the runner's nondefault UID/GID. Production
-checks confirm Mate's exclusion. Caches retain Composer downloads, the pinned
-Tailwind executable, Chrome driver and shared Docker layers. Documentation-only
+checks confirm Mate's exclusion. The existing Symfony job installs the locked
+Devbox environment, verifies actual tools, runs setup/linting/assets/PHPUnit/Panther,
+and fails if installation changes the package locks. Caches retain Devbox/Nix
+packages, Composer downloads, the pinned Tailwind executable and shared Docker layers.
+Documentation-only
 PRs retain the named checks while skipping expensive work; invalid scope decisions
 fail. Pushes and manual runs always validate.
+
+To update development tools intentionally, use `devbox update` (or name a package),
+then run `devbox run check`, `devbox run setup` and `devbox run test` before committing
+`devbox.json` and `devbox.lock`. Update Chromium and ChromeDriver together; the
+check rejects mismatched versions. Keep generated `.devbox/` state out of Git.
+Devbox configuration and state are excluded from production Docker images.
 
 ## Build the production image
 
