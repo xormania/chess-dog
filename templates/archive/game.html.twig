@@ -1,0 +1,28 @@
+{% extends 'base.html.twig' %}
+{% block title %}Game evidence · Chess Dog{% endblock %}
+{% block body %}
+<div class="page-width archive-page">
+    <a href="{{ path('app_players') }}" class="text-link">Find a player</a>
+    <p class="eyebrow">Game archive</p><h1>Moves and clocks.</h1>
+    {% if error %}<p role="alert">{{ error }}</p>{% else %}
+        <p>{{ game.headers.White|default('White') }} · {{ game.headers.Black|default('Black') }} · {{ game.headers.Result|default('Result unavailable') }}</p>
+        {% if game.parse_status|default('unavailable') != 'complete' %}<p role="status">This record preserves the available notation. Board interpretation is {{ game.parse_status|default('unavailable') }}.</p>{% endif %}
+        <section aria-labelledby="moves-heading"><h2 id="moves-heading">Played moves</h2>
+            <div class="archive-table"><table><thead><tr><th>Ply</th><th>Side</th><th>Move</th><th>Annotations</th></tr></thead><tbody>
+                {% for node in game.nodes|default([]) %}{% if node.is_mainline and node.node_index > 0 %}<tr><td>{{ node.ply }}</td><td>{{ node.mover|default('Unknown') }}</td><td>{{ node.move_san|default(node.move_uci|default('Unavailable')) }}</td><td>{{ node.comments|default([])|join(' ') }}</td></tr>{% endif %}{% endfor %}
+            </tbody></table></div>
+        </section>
+        <section aria-labelledby="clocks-heading"><h2 id="clocks-heading">Reported clock observations</h2>
+            <p>Remaining clock and reported elapsed time are separate observations. Missing clock values remain unknown. These are not calculated thinking times.</p>
+            {% if game.clocks|default([]) is empty %}<p>No clock observations were supplied.</p>{% else %}
+            <div class="archive-table"><table><thead><tr><th>Move node</th><th>Kind</th><th>Seconds</th><th>Source</th><th>Original value</th><th>Precision</th><th>Status</th></tr></thead><tbody>
+                {% for clock in game.clocks %}<tr><td>{{ clock.node_index is null ? 'Unmapped' : clock.node_index }}</td><td>{{ clock.kind }}</td><td>{{ clock.seconds is null ? 'Unknown' : clock.seconds }}</td><td>{{ clock.source }}</td><td>{{ clock.raw_text }}</td><td>{{ clock.precision_seconds is null ? 'Unknown' : clock.precision_seconds ~ ' s' }}</td><td>{{ clock.status }}</td></tr>{% endfor %}
+            </tbody></table></div>
+            {% endif %}
+        </section>
+        <details><summary>Variation and source details</summary><p>{{ game.variant|default('Unknown variant') }} · Version {{ game.id }} · {{ game.nodes|default([])|length }} move nodes · {{ game.sources|default([])|length }} source observations.</p>
+            <ul>{% for node in game.nodes|default([]) %}{% if not node.is_mainline %}<li>Node {{ node.node_index }} from {{ node.parent_index }}: {{ node.move_san|default('Unavailable notation') }} {{ node.comments|default([])|join(' ') }}</li>{% endif %}{% endfor %}</ul>
+        </details>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends 'base.html.twig' %}
+{% block title %}Collection · Chess Dog{% endblock %}
+{% block body %}
+<div class="page-width archive-page">
+    <p class="eyebrow">Collection</p><h1>Your collection.</h1>
+    {% if error %}<p role="alert">{{ error }}</p>{% else %}
+        <p role="status">Status: {{ run.status|default('Unknown') }}</p>
+        {% if run.jobs|default([]) %}<ul>{% for job in run.jobs %}<li>{{ job.status|default('Pending') }}{% if job.error|default(null) %} · This step needs attention.{% endif %}</li>{% endfor %}</ul>{% endif %}
+        <a class="primary-link" href="{{ app.request.pathInfo }}">Check progress</a>
+    {% endif %}
+    <p><a class="text-link" href="{{ path('app_players') }}">Return to player search</a></p>
+</div>
+{% endblock %}

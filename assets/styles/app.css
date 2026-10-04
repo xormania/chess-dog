@@ -1,5 +1,16 @@
 @import 'tailwindcss';
 
+.archive-page { padding-block: 4rem; }
+.archive-page h1 { font-size: clamp(2rem, 5vw, 3.5rem); margin-block: 1rem; }
+.archive-page h2 { font-size: 1.5rem; margin-block: 1rem; }
+.archive-page section { margin-block: 2rem; }
+.archive-page .preview-fields { align-items: end; margin-block: 1.5rem; }
+.archive-facts { display: flex; flex-wrap: wrap; gap: 1rem 3rem; margin-block: 2rem; }
+.archive-facts dt { font-size: .8rem; opacity: .7; }
+.archive-table { overflow-x: auto; }
+.archive-table table { width: 100%; border-collapse: collapse; }
+.archive-table th, .archive-table td { padding: .8rem; text-align: left; border-bottom: 1px solid currentColor; }
+
 @source '../../templates';
 @source '../vendor/flowbite';
 

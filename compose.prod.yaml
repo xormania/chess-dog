@@ -13,6 +13,8 @@ services:
       - caddy_config_prod:/config
     environment:
       APP_SECRET: ${APP_SECRET}
+      CHESS_CRAWL_URL: ${CHESS_CRAWL_URL:-http://127.0.0.1:8000}
+      CHESS_CRAWL_TOKEN: ${CHESS_CRAWL_TOKEN:-}
       MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
       MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
 

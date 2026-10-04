@@ -2,9 +2,11 @@
 
 The Symfony web application for [chess-crawl](https://github.com/xormania/chess-crawl).
 
-This first increment supplies a runnable application shell and a small provider
-and player preview. The preview exercises Live Components without contacting a
-chess provider or chess-crawl. Backend integration is a later increment.
+Chess Dog connects to chess-crawl through server-side archive credentials. The
+Players page looks up stored profiles, pages through a player's games, and shows
+move notation and exact reported clock observations. Collection is an explicit
+form submission that creates a background job. Reading pages does not fetch from
+a chess provider. The Foundation preview still exercises Live Components locally.
 Returning through Turbo or loading a new Foundation document starts a fresh
 preview. Native browser Back may preserve the complete preview in the browser's
 page cache; its provider selection and Live state remain consistent.
@@ -312,9 +314,42 @@ Production uses separate `caddy_data_prod` and `caddy_config_prod` volumes. This
 keeps its certificates readable without reusing storage owned by the local
 development UID/GID; both modes retain their own Caddy storage across shutdowns.
 
-The Symfony Docker runtime retains its bundled Mercure capabilities. There is
-no application event integration in this increment. Chess-crawl's API and hub
-will be integrated through application-owned configuration and credentials.
+The Symfony Docker runtime retains its bundled Mercure capabilities. Collection
+progress currently refreshes on demand; authenticated live event subscriptions
+remain a follow-up.
+
+## Connect your local archive
+
+Use chess-crawl with the game-evidence and scoped archive API foundation changes
+(Crawl PR #27 and its API follow-up). Start its API and worker, then set these
+values in uncommitted `.env.local` or Symfony secrets:
+
+```dotenv
+CHESS_CRAWL_URL=http://127.0.0.1:8000
+CHESS_CRAWL_TOKEN=<your-local-workspace-api-token>
+```
+
+Use **Players** to search a provider and player name. A missing account can be
+collected by selecting a UTC period of up to one year; the upper date is exclusive.
+The initial form caps a collection at 1,000 games. Larger full-history collection,
+resource coverage, working-set selection and model/Fair Play analysis controls
+will build on the backend API in later UI increments. Clock views distinguish
+zero, unknown, original units/precision, remaining clocks and reported elapsed
+times; they do not invent thinking time from ambiguous observations.
+
+The URL and bearer credential remain on the server. Requests use a fixed base
+URL, have time/body limits, and do not follow redirects. Use HTTPS for an external
+archive endpoint. In optional development containers, the host API is reachable
+through `http://host.docker.internal:8000`; set the runtime environment explicitly
+or use a shared private network, and ensure the API bind/firewall permits it.
+Production Compose must receive these variables through the PHP service's
+environment or Symfony's production secrets rather than depending on a local
+development file.
+
+This connection is for a local, single-workspace installation. A SaaS front end
+must authenticate application users and select their server-owned workspace
+credential before exposing private runs or working sets. Do not deploy this
+local interface as a shared multi-user portal with one global workspace token.
 
 ## Contribute
 

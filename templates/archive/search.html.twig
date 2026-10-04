@@ -1,0 +1,16 @@
+{% extends 'base.html.twig' %}
+{% block title %}Find a player · Chess Dog{% endblock %}
+{% block body %}
+<div class="page-width archive-page">
+    <p class="eyebrow">Player archive</p><h1>Find a player.</h1>
+    <p>Explore stored games and player history. Choose a player to get started.</p>
+    {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+    <form action="{{ path('app_players') }}" method="get" class="preview-fields">
+        <div class="preview-field"><label for="provider" class="field-label">Provider</label>
+            <select id="provider" name="provider" class="preview-select"><option value="chess.com"{% if provider == 'chess.com' %} selected{% endif %}>Chess.com</option><option value="lichess"{% if provider == 'lichess' %} selected{% endif %}>Lichess</option></select>
+        </div>
+        <div class="preview-field"><label for="username" class="field-label">Player name</label><input id="username" name="username" value="{{ username }}" required maxlength="100" pattern="[A-Za-z0-9_-]+" class="preview-select" autocomplete="off"></div>
+        <button type="submit" class="primary-link">Find player</button>
+    </form>
+</div>
+{% endblock %}
