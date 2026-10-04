@@ -52,10 +52,12 @@ final readonly class CrawlSubscriptions
                 || preg_match('/\s/', $publicUrl)) {
                 throw new ArchiveUnavailable(503);
             }
-            $origin = $url['scheme'].'://'.$url['host'].(isset($url['port']) ? ':'.$url['port'] : '');
             // This foundation intentionally uses a host-only cookie through the app's origin.
             // A same-origin reverse proxy avoids granting parent-domain cookies or CORS authority.
-            if ($origin !== $request->getSchemeAndHttpHost()) {
+            $scheme = strtolower($url['scheme']);
+            $port = $url['port'] ?? ('https' === $scheme ? 443 : 80);
+            if ($scheme !== $request->getScheme() || strtolower($url['host']) !== $request->getHost()
+                || $port !== (int) $request->getPort()) {
                 throw new ArchiveUnavailable(503);
             }
             $topics = array_map(fn (EventCursor $cursor) => $this->topics->resource(

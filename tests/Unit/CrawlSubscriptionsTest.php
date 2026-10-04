@@ -91,6 +91,20 @@ final class CrawlSubscriptionsTest extends TestCase
         }
     }
 
+    public function testDefaultPortNotationDoesNotChangeOrigin(): void
+    {
+        foreach ([
+            ['https://dog.example:443/.well-known/mercure', 'https://dog.example/'],
+            ['https://dog.example/.well-known/mercure', 'https://dog.example:443/'],
+            ['http://dog.example:80/.well-known/mercure', 'http://dog.example/'],
+            ['https://dog.example:8443/.well-known/mercure', 'https://dog.example:8443/'],
+        ] as [$publicUrl, $requestUrl]) {
+            self::assertSame(['https://chess-crawl.local/workspaces/local/runs/7'], $this->service(
+                publicUrl: $publicUrl,
+            )->forRun(Request::create($requestUrl), 7)->topics);
+        }
+    }
+
     private function service(?MockHttpClient $http = null, string $publicUrl = 'https://dog.example/.well-known/mercure', string $secret = self::SECRET): CrawlSubscriptions
     {
         $contexts = new ConfiguredArchiveContextProvider('local', 'server-test-token');
