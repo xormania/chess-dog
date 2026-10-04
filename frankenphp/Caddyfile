@@ -26,6 +26,10 @@
 	encode zstd br gzip
 
 	mercure {
+		# Symfony's current Mercure JWT factory emits the 0.x claim and cookie
+		# format. Keep compatibility explicit until application-issued grants
+		# migrate to Mercure 1.x access tokens and issuer validation.
+		protocol_version_compatibility 8
 		# Publisher JWT key
 		publisher_jwt {env.MERCURE_PUBLISHER_JWT_KEY} {env.MERCURE_PUBLISHER_JWT_ALG}
 		# Subscriber JWT key

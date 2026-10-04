@@ -244,7 +244,7 @@ jobs:
             mode_file=compose.override.yaml
           fi
           echo "COMPOSE_FILE=compose.yaml:$mode_file:$RUNNER_TEMP/chess-dog-ci.yaml" >> "$GITHUB_ENV"
-      - name: Verify development and production Caddy storage are isolated
+      - name: Verify Compose storage and Mercure subscriber credentials
         if: needs.changes.outputs.run_checks == 'true'
         run: |
           docker compose -f compose.yaml -f compose.override.yaml config --format json > "$RUNNER_TEMP/compose-dev.json"
@@ -257,6 +257,10 @@ jobs:
           for filename in sys.argv[1:]:
               with open(filename) as source:
                   config = json.load(source)
+              environment = config['services']['php']['environment']
+              expected_secret = 'ci-only-unused-mercure-key'
+              assert environment['MERCURE_SUBSCRIBER_JWT_KEY'] == expected_secret, 'Hub subscriber key is not configured'
+              assert environment['MERCURE_SUBSCRIBER_JWT_SECRET'] == expected_secret, 'Application subscriber key differs from the hub'
               names = set()
               for target in ('/data', '/config'):
                   mounts = [mount for mount in config['services']['php']['volumes'] if mount['target'] == target]
@@ -265,7 +269,7 @@ jobs:
               assert len(names) == 2, 'Caddy data and config must use separate volumes'
               storage.append(names)
           assert storage[0].isdisjoint(storage[1]), 'Development and production must not share Caddy storage'
-          print('Development and production use separate Caddy volumes.')
+          print('Compose modes isolate Caddy volumes and share one Mercure subscriber key.')
           PY
       - name: Seed retained development storage with legacy root ownership
         if: needs.changes.outputs.run_checks == 'true' && matrix.name == 'development'
