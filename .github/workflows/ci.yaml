@@ -85,7 +85,22 @@ jobs:
           enable-cache: 'true'
       - name: Allow the installed Chromium namespace sandbox
         if: needs.changes.outputs.run_checks == 'true'
-        run: devbox run -- scripts/configure-chromium-sandbox --install
+        run: |
+          devbox run -- scripts/configure-chromium-sandbox --install
+          # A second invocation must safely update the managed profile.
+          devbox run -- scripts/configure-chromium-sandbox --install
+          if [[ $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || true) == 1 ]]; then
+            profile_probe=/etc/apparmor.d/chess-dog-unmanaged-ci-probe
+            test ! -e "$profile_probe"
+            trap 'sudo rm -f -- "$profile_probe"' EXIT
+            printf '# Unmanaged CI profile probe\n' | sudo tee "$profile_probe" >/dev/null
+            if devbox run -- scripts/configure-chromium-sandbox --install --profile-name chess-dog-unmanaged-ci-probe > "$RUNNER_TEMP/profile-probe.log" 2>&1; then
+              echo 'An unmanaged AppArmor profile was accepted for replacement.' >&2
+              exit 1
+            fi
+            grep -F 'Refusing to overwrite unmanaged AppArmor profile:' "$RUNNER_TEMP/profile-probe.log"
+            test "$(cat "$profile_probe")" = '# Unmanaged CI profile probe'
+          fi
       - name: Verify development tools and child runtimes
         if: needs.changes.outputs.run_checks == 'true'
         run: |

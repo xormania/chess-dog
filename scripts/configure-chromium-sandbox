@@ -66,7 +66,9 @@ browser_binary=$(readlink -f "$browser_binary")
 }
 [[ $(head -c 4 "$browser_binary") == $'\x7fELF' ]] || { printf 'Not an ELF executable.\n' >&2; exit 2; }
 
+marker='# Managed by chess-dog/scripts/configure-chromium-sandbox.'
 profile=$(cat <<PROFILE
+$marker
 abi <abi/4.0>,
 include <tunables/global>
 
@@ -77,6 +79,13 @@ PROFILE
 )
 if ! $install_profile; then printf '%s\n' "$profile"; exit 0; fi
 
+profile_path="/etc/apparmor.d/$profile_name"
+if [[ -e "$profile_path" || -L "$profile_path" ]]; then
+    if [[ -L "$profile_path" || ! -f "$profile_path" ]] || ! grep -Fxq "$marker" "$profile_path"; then
+        printf 'Refusing to overwrite unmanaged AppArmor profile: %s\n' "$profile_path" >&2
+        exit 1
+    fi
+fi
 parser=$(command -v apparmor_parser) || { printf 'Install your distribution\x27s AppArmor tools first.\n' >&2; exit 1; }
 profile_file=$(mktemp)
 trap 'rm -f -- "$profile_file"' EXIT
@@ -84,6 +93,6 @@ printf '%s\n' "$profile" > "$profile_file"
 root_command=()
 if ((EUID != 0)); then root_command=(sudo); fi
 "${root_command[@]}" "$parser" --skip-kernel-load "$profile_file"
-"${root_command[@]}" install -m 644 "$profile_file" "/etc/apparmor.d/$profile_name"
-"${root_command[@]}" "$parser" -r "/etc/apparmor.d/$profile_name"
+"${root_command[@]}" install -m 644 "$profile_file" "$profile_path"
+"${root_command[@]}" "$parser" -r "$profile_path"
 printf 'Loaded %s for %s.\n' "$profile_name" "$browser_binary"
