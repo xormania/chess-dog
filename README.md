@@ -4,7 +4,9 @@ The Symfony web application for [chess-crawl](https://github.com/xormania/chess-
 
 This first increment supplies a runnable application shell and a small provider
 and player preview. The preview exercises Live Components without contacting a
-chess provider or chess-crawl. Backend integration is a later increment.
+chess provider or chess-crawl. Server-side archive services are available for a
+future integration; the preview does not call them. See
+[archive services](docs/archive-services.md) for configuration and authorization.
 Returning through Turbo or loading a new Foundation document starts a fresh
 preview. Native browser Back may preserve the complete preview in the browser's
 page cache; its provider selection and Live state remain consistent.
@@ -312,9 +314,11 @@ Production uses separate `caddy_data_prod` and `caddy_config_prod` volumes. This
 keeps its certificates readable without reusing storage owned by the local
 development UID/GID; both modes retain their own Caddy storage across shutdowns.
 
-The Symfony Docker runtime retains its bundled Mercure capabilities. There is
-no application event integration in this increment. Chess-crawl's API and hub
-will be integrated through application-owned configuration and credentials.
+The Symfony Docker runtime retains its bundled Mercure capabilities. Server-side
+archive services can read scoped Crawl state and grant exact private Mercure
+subscriptions. Browser and component wiring remains open. See
+[archive services](docs/archive-services.md) before configuring credentials or
+exposing these services through authenticated application routes.
 
 ## Contribute
 
