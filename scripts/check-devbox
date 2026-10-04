@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Validate the installed environment, including PHP child processes and Panther.
+set -euo pipefail
+
+usage() {
+    cat <<'HELP'
+Usage: scripts/check-devbox [--headless] [--with-docker]
+
+Run inside `devbox shell`, or use `devbox run check`.
+Check the actual tools, PHP extensions/child runtime, and browser/driver pairing.
+No project dependencies, browser drivers, or services are installed by this check.
+
+Options:
+  --headless     Also launch Chromium on about:blank with a disposable profile
+                 (honors Panther's explicit PANTHER_NO_SANDBOX setting)
+  --with-docker  Also require a reachable Docker daemon (e.g. Docker Desktop)
+  -h, --help     Show this help
+HELP
+}
+
+with_docker=false
+headless=false
+while (($#)); do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --with-docker) with_docker=true; shift ;;
+        --headless) headless=true; shift ;;
+        *) printf 'check-devbox: unknown option %s (see --help).\n' "$1" >&2; exit 2 ;;
+    esac
+done
+
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+for tool in php composer symfony chromium chromedriver docker python3 bash curl git unzip grep sed awk find xargs rg; do
+    tool_path=$(command -v "$tool") || { printf 'Missing tool: %s\n' "$tool" >&2; exit 1; }
+    case "$(readlink -f "$tool_path")" in
+        /nix/store/*) ;;
+        *) printf '%s is not provided by Devbox: %s\n' "$tool" "$tool_path" >&2; exit 1 ;;
+    esac
+done
+
+php <<'PHP'
+<?php
+if (PHP_MAJOR_VERSION !== 8 || PHP_MINOR_VERSION !== 5) {
+    throw new RuntimeException('Expected PHP 8.5, got '.PHP_VERSION);
+}
+foreach (['ctype', 'curl', 'dom', 'fileinfo', 'filter', 'iconv', 'intl', 'mbstring', 'openssl', 'pcntl', 'pdo_sqlite', 'session', 'simplexml', 'tokenizer', 'xml', 'xmlwriter', 'zip'] as $extension) {
+    if (!extension_loaded($extension)) {
+        throw new RuntimeException('Missing PHP extension: '.$extension.'; check PHP_INI_SCAN_DIR and PHPRC overrides.');
+    }
+}
+// Symfony/Panther invoke PHP_BINARY directly, bypassing the outer Nix wrapper.
+$probe = 'echo json_encode([PHP_VERSION, get_loaded_extensions()]);';
+$process = proc_open([PHP_BINARY, '-r', $probe], [1 => ['pipe', 'w'], 2 => ['file', 'php://stderr', 'w']], $pipes);
+if (!is_resource($process)) {
+    throw new RuntimeException('Could not start child PHP.');
+}
+$actual = stream_get_contents($pipes[1]);
+fclose($pipes[1]);
+if (proc_close($process) !== 0 || json_decode($actual, true, flags: JSON_THROW_ON_ERROR) !== [PHP_VERSION, get_loaded_extensions()]) {
+    throw new RuntimeException('Child PHP does not have the same version/extensions.');
+}
+echo 'PHP '.PHP_VERSION.' and child runtime extensions passed.'.PHP_EOL;
+PHP
+
+composer_version=$(composer --version 2>&1)
+printf '%s\n' "$composer_version"
+[[ "$composer_version" == *'Composer version 2.'* && "$composer_version" == *'PHP version 8.5.'* ]]
+symfony php -r 'if (PHP_MAJOR_VERSION !== 8 || PHP_MINOR_VERSION !== 5 || !extension_loaded("intl")) { exit(1); }'
+
+browser_version=$(chromium --version)
+driver_version=$(chromedriver --version)
+[[ "$browser_version" =~ ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]
+browser_number=${BASH_REMATCH[1]}
+[[ "$driver_version" =~ ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]
+[[ "$browser_number" == "${BASH_REMATCH[1]}" ]] || {
+    printf 'Browser/driver mismatch: %s / %s\n' "$browser_version" "$driver_version" >&2
+    exit 1
+}
+[[ "$(readlink -f "${PANTHER_CHROME_BINARY:?Devbox must set PANTHER_CHROME_BINARY}")" == "$(readlink -f "$(command -v chromium)")" ]]
+printf '%s; %s\n' "$browser_version" "$driver_version"
+if $headless; then
+    browser_probe_dir=$(mktemp -d)
+    trap 'rm -rf -- "$browser_probe_dir"' EXIT
+    browser_args=(--headless --disable-gpu "--user-data-dir=$browser_probe_dir/profile")
+    case ${PANTHER_NO_SANDBOX:-0} in 1|true) browser_args+=(--no-sandbox) ;; esac
+    if ! timeout 30 chromium "${browser_args[@]}" --dump-dom about:blank > "$browser_probe_dir/output" 2>&1; then
+        cat "$browser_probe_dir/output" >&2
+        printf 'Chromium headless startup failed.\n' >&2
+        exit 1
+    fi
+    grep -F '<html' "$browser_probe_dir/output"
+fi
+docker compose version
+docker buildx version
+if $with_docker; then docker info >/dev/null; fi
+printf 'Devbox environment checks passed.\n'

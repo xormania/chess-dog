@@ -22,3 +22,6 @@
 # Generated IDE configuration reference.
 /config/reference.php
 /drivers/
+
+# Local Devbox environment; package definitions and lockfile are committed.
+/.devbox/

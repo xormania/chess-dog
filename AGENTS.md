@@ -9,6 +9,9 @@ the optional Docker workflow, validation and integration status. Read
 composer.json, composer.lock, symfony.lock and importmap.php for installed
 dependencies and versions.
 
+Devbox defines the native tool environment in `devbox.json` and `devbox.lock`;
+README.md describes setup and the helpers in `scripts/`.
+
 Application commands and Mate default to the local PHP CLI. Docker invocation
 is available when inspecting the container's runtime. Mate's PHP 8.5 guard checks
 the interpreter version; it does not enforce Docker or identical extensions.
