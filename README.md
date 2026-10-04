@@ -101,7 +101,9 @@ start servers, or change Symfony's `APP_ENV`/cache settings.
 
 `scripts/check-devbox` verifies tool provenance, PHP/Composer versions, required
 extensions (including child PHP processes), Symfony's PHP selection, matching
-browser/driver versions and Docker client plugins. `--with-docker` additionally
+browser/driver versions and Docker client plugins. `--headless` also launches
+Chromium against `about:blank` with a temporary profile and reports startup errors.
+`--with-docker` additionally
 requires a reachable daemon. If PHP extensions fail, inspect inherited `PHPRC` or
 `PHP_INI_SCAN_DIR` overrides. Panther uses Devbox's Chromium by default; set
 `PANTHER_CHROME_BINARY` explicitly to test another browser installation.

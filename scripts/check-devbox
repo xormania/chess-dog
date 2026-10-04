@@ -4,23 +4,27 @@ set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Usage: scripts/check-devbox [--with-docker]
+Usage: scripts/check-devbox [--headless] [--with-docker]
 
 Run inside `devbox shell`, or use `devbox run check`.
 Check the actual tools, PHP extensions/child runtime, and browser/driver pairing.
 No project dependencies, browser drivers, or services are installed by this check.
 
 Options:
+  --headless     Also launch Chromium on about:blank with a disposable profile
+                 (honors Panther's explicit PANTHER_NO_SANDBOX setting)
   --with-docker  Also require a reachable Docker daemon (e.g. Docker Desktop)
   -h, --help     Show this help
 HELP
 }
 
 with_docker=false
+headless=false
 while (($#)); do
     case "$1" in
         -h|--help) usage; exit 0 ;;
         --with-docker) with_docker=true; shift ;;
+        --headless) headless=true; shift ;;
         *) printf 'check-devbox: unknown option %s (see --help).\n' "$1" >&2; exit 2 ;;
     esac
 done
@@ -74,6 +78,18 @@ browser_number=${BASH_REMATCH[1]}
 }
 [[ "$(readlink -f "${PANTHER_CHROME_BINARY:?Devbox must set PANTHER_CHROME_BINARY}")" == "$(readlink -f "$(command -v chromium)")" ]]
 printf '%s; %s\n' "$browser_version" "$driver_version"
+if $headless; then
+    browser_probe_dir=$(mktemp -d)
+    trap 'rm -rf -- "$browser_probe_dir"' EXIT
+    browser_args=(--headless --disable-gpu "--user-data-dir=$browser_probe_dir/profile")
+    case ${PANTHER_NO_SANDBOX:-0} in 1|true) browser_args+=(--no-sandbox) ;; esac
+    if ! timeout 30 chromium "${browser_args[@]}" --dump-dom about:blank > "$browser_probe_dir/output" 2>&1; then
+        cat "$browser_probe_dir/output" >&2
+        printf 'Chromium headless startup failed.\n' >&2
+        exit 1
+    fi
+    grep -F '<html' "$browser_probe_dir/output"
+fi
 docker compose version
 docker buildx version
 if $with_docker; then docker info >/dev/null; fi

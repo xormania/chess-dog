@@ -86,7 +86,7 @@ jobs:
       - name: Verify development tools and child runtimes
         if: needs.changes.outputs.run_checks == 'true'
         run: |
-          devbox run check
+          devbox run -- check --headless
           devbox run -- setup --help | grep -F 'Usage: scripts/setup'
       - name: Locate Composer download cache
         if: needs.changes.outputs.run_checks == 'true'
