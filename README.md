@@ -94,7 +94,7 @@ Open the URL printed by Symfony. For live stylesheet updates, run
 `devbox run watch` in another terminal. Each new terminal can enter `devbox shell`;
 `exit` leaves the environment. For individual commands, use `devbox run -- php
 bin/console about`, or the `setup`, `check`, `test`, `serve` and `watch` aliases.
-For example, `devbox run setup --env test --skip-assets -- --no-interaction` forwards
+For example, `devbox run -- setup --env test --skip-assets -- --no-interaction` forwards
 options to the existing setup helper; `devbox run test --filter RuntimeStorageTest`
 forwards PHPUnit options. Starting a shell does not install project dependencies,
 start servers, or change Symfony's `APP_ENV`/cache settings.

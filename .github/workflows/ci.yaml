@@ -85,7 +85,9 @@ jobs:
           enable-cache: 'true'
       - name: Verify development tools and child runtimes
         if: needs.changes.outputs.run_checks == 'true'
-        run: devbox run check
+        run: |
+          devbox run check
+          devbox run -- setup --help | grep -F 'Usage: scripts/setup'
       - name: Locate Composer download cache
         if: needs.changes.outputs.run_checks == 'true'
         id: composer-cache
@@ -101,11 +103,11 @@ jobs:
         if: needs.changes.outputs.run_checks == 'true'
         run: |
           devbox run -- composer validate --strict
-          devbox run setup --env test --skip-assets -- --prefer-dist --no-interaction --no-progress
+          devbox run -- setup --env test --skip-assets -- --prefer-dist --no-interaction --no-progress
       - name: Validate PHP, Symfony configuration, and templates
         if: needs.changes.outputs.run_checks == 'true'
         run: |
-          devbox run -- bash -c 'git ls-files -z -- "*.php" bin/console | xargs -0 -r -n 1 php -l'
+          devbox run -- bash -euo pipefail -c 'git ls-files -z -- "*.php" bin/console | xargs -0 -r -n 1 php -l'
           devbox run -- php bin/console lint:yaml config --parse-tags
           devbox run -- php bin/console lint:twig templates
           devbox run -- php bin/console lint:container --resolve-env-vars
@@ -123,7 +125,9 @@ jobs:
           devbox run -- php bin/console asset-map:compile
       - name: Run application and browser tests
         if: needs.changes.outputs.run_checks == 'true'
-        run: devbox run test --log-junit var/test-results.xml
+        run: |
+          devbox run test --log-junit var/test-results.xml
+          test -s var/test-results.xml
       - name: Verify package locks remain unchanged
         if: needs.changes.outputs.run_checks == 'true'
         run: |

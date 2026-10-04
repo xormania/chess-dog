@@ -1,13 +1,22 @@
 {
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.18.4/.schema/devbox.schema.json",
   "packages": {
-    "php85": { "version": "8.5", "disable_plugin": true },
-    "php85Packages.composer": { "version": "2", "disable_plugin": true },
+    "php85": {
+      "version": "8.5",
+      "disable_plugin": true
+    },
+    "php85Packages.composer": {
+      "version": "2",
+      "disable_plugin": true
+    },
     "symfony-cli": "latest",
     "chromium": "latest",
     "chromedriver": "latest",
     "docker-client": "latest",
-    "python3": "3",
+    "python3": {
+      "version": "3",
+      "disable_plugin": true
+    },
     "bash": "5",
     "coreutils": "latest",
     "curl": "latest",
@@ -24,11 +33,11 @@
       "export PANTHER_CHROME_BINARY=\"${PANTHER_CHROME_BINARY:-$(command -v chromium)}\""
     ],
     "scripts": {
-      "setup": "scripts/setup",
-      "check": "scripts/check-devbox",
-      "test": "vendor/bin/phpunit",
-      "serve": "symfony server:start",
-      "watch": "php bin/console tailwind:build --watch"
+      "setup": "scripts/setup \"$@\"",
+      "check": "scripts/check-devbox \"$@\"",
+      "test": "vendor/bin/phpunit \"$@\"",
+      "serve": "symfony server:start \"$@\"",
+      "watch": "php bin/console tailwind:build --watch \"$@\""
     }
   }
 }
