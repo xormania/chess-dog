@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [dev]
+    branches: [dev, master]
   push:
     branches: [dev, master]
   workflow_dispatch:
@@ -55,9 +55,10 @@ jobs:
     needs: changes
     # Required checks must remain present, even for docs-only PRs or a failed
     # classifier. A failed classifier must fail these checks, never skip them.
-    if: ${{ always() }}
+    # Superseded runs must still cancel their expensive work.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       APP_ENV: test
       PANTHER_APP_ENV: test
@@ -76,18 +77,39 @@ jobs:
           esac
       - uses: actions/checkout@v6
         if: needs.changes.outputs.run_checks == 'true'
-      - name: Set up PHP
+      - name: Install the locked Devbox environment
         if: needs.changes.outputs.run_checks == 'true'
-        uses: shivammathur/setup-php@v2
+        uses: jetify-com/devbox-install-action@8c6a66ed6273138b1915457069de78cb52fe3bd7 # v0.15.0
         with:
-          php-version: '8.5'
-          extensions: intl, mbstring, pdo_sqlite, zip
-          tools: composer:v2
-          coverage: none
+          devbox-version: '0.18.4'
+          enable-cache: 'true'
+      - name: Allow the installed Chromium namespace sandbox
+        if: needs.changes.outputs.run_checks == 'true'
+        run: |
+          devbox run -- scripts/configure-chromium-sandbox --install
+          # A second invocation must safely update the managed profile.
+          devbox run -- scripts/configure-chromium-sandbox --install
+          if [[ $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || true) == 1 ]]; then
+            profile_probe=/etc/apparmor.d/chess-dog-unmanaged-ci-probe
+            test ! -e "$profile_probe"
+            trap 'sudo rm -f -- "$profile_probe"' EXIT
+            printf '# Unmanaged CI profile probe\n' | sudo tee "$profile_probe" >/dev/null
+            if devbox run -- scripts/configure-chromium-sandbox --install --profile-name chess-dog-unmanaged-ci-probe > "$RUNNER_TEMP/profile-probe.log" 2>&1; then
+              echo 'An unmanaged AppArmor profile was accepted for replacement.' >&2
+              exit 1
+            fi
+            grep -F 'Refusing to overwrite unmanaged AppArmor profile:' "$RUNNER_TEMP/profile-probe.log"
+            test "$(cat "$profile_probe")" = '# Unmanaged CI profile probe'
+          fi
+      - name: Verify development tools and child runtimes
+        if: needs.changes.outputs.run_checks == 'true'
+        run: |
+          devbox run -- check --headless
+          devbox run -- setup --help | grep -F 'Usage: scripts/setup'
       - name: Locate Composer download cache
         if: needs.changes.outputs.run_checks == 'true'
         id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+        run: echo "dir=$(devbox run -- composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
       - name: Cache Composer downloads
         if: needs.changes.outputs.run_checks == 'true'
         uses: actions/cache@v6
@@ -98,15 +120,15 @@ jobs:
       - name: Install locked dependencies
         if: needs.changes.outputs.run_checks == 'true'
         run: |
-          composer validate --strict
-          composer install --prefer-dist --no-interaction --no-progress
+          devbox run -- composer validate --strict
+          devbox run -- setup --env test --skip-assets -- --prefer-dist --no-interaction --no-progress
       - name: Validate PHP, Symfony configuration, and templates
         if: needs.changes.outputs.run_checks == 'true'
         run: |
-          git ls-files -z -- '*.php' bin/console | xargs -0 -r -n 1 php -l
-          php bin/console lint:yaml config --parse-tags
-          php bin/console lint:twig templates
-          php bin/console lint:container --resolve-env-vars
+          devbox run -- bash -euo pipefail -c 'git ls-files -z -- "*.php" bin/console | xargs -0 -r -n 1 php -l'
+          devbox run -- php bin/console lint:yaml config --parse-tags
+          devbox run -- php bin/console lint:twig templates
+          devbox run -- php bin/console lint:container --resolve-env-vars
       - name: Cache the pinned Tailwind executable
         if: needs.changes.outputs.run_checks == 'true'
         uses: actions/cache@v6
@@ -117,45 +139,18 @@ jobs:
       - name: Compile browser assets
         if: needs.changes.outputs.run_checks == 'true'
         run: |
-          php bin/console tailwind:build --minify
-          php bin/console asset-map:compile
-      - name: Identify the installed Chrome version
-        if: needs.changes.outputs.run_checks == 'true'
-        id: chrome
-        run: |
-          version=$(google-chrome --product-version)
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-      - name: Cache the matching Chrome driver
-        if: needs.changes.outputs.run_checks == 'true'
-        id: chrome-driver
-        uses: actions/cache@v6
-        with:
-          path: drivers/chromedriver
-          key: ${{ runner.os }}-${{ runner.arch }}-chromedriver-${{ steps.chrome.outputs.version }}-${{ hashFiles('composer.lock') }}
-      - name: Prepare the matching Chrome driver
-        if: needs.changes.outputs.run_checks == 'true' && steps.chrome-driver.outputs.cache-hit != 'true'
-        env:
-          CHROME_VERSION: ${{ steps.chrome.outputs.version }}
-        run: |
-          driver_path=$(command -v chromedriver || true)
-          driver_version=''
-          if [[ -n "$driver_path" ]]; then
-            if ! driver_version=$("$driver_path" --version 2>/dev/null); then
-              driver_version=''
-            fi
-          fi
-          if [[ "$driver_version" == "ChromeDriver $CHROME_VERSION "* ]]; then
-            mkdir -p drivers
-            cp "$driver_path" drivers/chromedriver
-          else
-            # Download only the browser used by Panther, rather than unrelated
-            # Firefox/Chromium drivers, when the runner has no exact match.
-            vendor/bin/bdi browser:google-chrome drivers
-          fi
+          devbox run -- php bin/console tailwind:build --minify
+          devbox run -- php bin/console asset-map:compile
       - name: Run application and browser tests
         if: needs.changes.outputs.run_checks == 'true'
-        run: vendor/bin/phpunit --log-junit var/test-results.xml
+        run: |
+          devbox run test --log-junit var/test-results.xml
+          test -s var/test-results.xml
+      - name: Verify package locks remain unchanged
+        if: needs.changes.outputs.run_checks == 'true'
+        run: |
+          git ls-files --error-unmatch devbox.lock
+          git diff --exit-code -- devbox.json devbox.lock composer.lock
       - name: Upload test failure evidence
         if: failure()
         uses: actions/upload-artifact@v7
@@ -165,13 +160,14 @@ jobs:
             var/error-screenshots/
             var/log/test.log
             var/test-results.xml
+            devbox.lock
           retention-days: 7
           if-no-files-found: ignore
 
   docker:
     name: Docker / ${{ matrix.name }}
     needs: changes
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -208,6 +204,11 @@ jobs:
         if: needs.changes.outputs.run_checks == 'true'
       - uses: docker/setup-buildx-action@v4
         if: needs.changes.outputs.run_checks == 'true'
+      - name: Match development containers to the checkout owner
+        if: needs.changes.outputs.run_checks == 'true'
+        run: |
+          echo "LOCAL_UID=$(id -u)" >> "$GITHUB_ENV"
+          echo "LOCAL_GID=$(id -g)" >> "$GITHUB_ENV"
       - name: Build Docker image
         if: needs.changes.outputs.run_checks == 'true'
         uses: docker/build-push-action@v7
@@ -216,6 +217,9 @@ jobs:
           target: ${{ matrix.target }}
           load: true
           tags: app-php-${{ matrix.image }}
+          build-args: |
+            LOCAL_UID=${{ env.LOCAL_UID }}
+            LOCAL_GID=${{ env.LOCAL_GID }}
           # Content-addressed layers also reuse the shared PHP base stage from
           # the other target, without restoring stale application outputs.
           cache-from: |
@@ -263,17 +267,44 @@ jobs:
           assert storage[0].isdisjoint(storage[1]), 'Development and production must not share Caddy storage'
           print('Development and production use separate Caddy volumes.')
           PY
+      - name: Seed retained development storage with legacy root ownership
+        if: needs.changes.outputs.run_checks == 'true' && matrix.name == 'development'
+        run: |
+          docker compose run --rm --no-deps --user root --entrypoint sh caddy-storage -euc '
+            mkdir -p /data/caddy /config/caddy
+            printf retained > /data/caddy/ownership-regression
+            chown -R root:root /data/caddy /config/caddy
+            chmod 700 /data/caddy /config/caddy
+          '
       - name: Start Compose application and wait for health checks
         if: needs.changes.outputs.run_checks == 'true'
         run: |
           docker compose config --quiet
           docker compose up --no-build --wait --wait-timeout 120
+      - name: Verify HTTP redirects to the published HTTPS port
+        if: needs.changes.outputs.run_checks == 'true'
+        run: |
+          for method in GET POST; do
+            # Exercise URL authorities over the same connection, without relying
+            # on the runner or Docker bridge having IPv6 networking enabled.
+            for host in localhost 127.0.0.1 '[::1]' '[2001:db8::42]' '[::ffff:192.0.2.1]'; do
+              for source_port in '' ":$HTTP_PORT"; do
+                authority="$host$source_port"
+                redirect=$(curl --fail --silent --show-error --request "$method" --header "Host: $authority" --output /dev/null --write-out '%{http_code} %{redirect_url}' "http://localhost:$HTTP_PORT/foundation?provider=lichess&player=xor%20test")
+                expected="308 https://$host:$HTTPS_PORT/foundation?provider=lichess&player=xor%20test"
+                if [[ "$redirect" != "$expected" ]]; then
+                  printf 'Unexpected %s redirect for %s: %s (expected %s)\n' "$method" "$authority" "$redirect" "$expected" >&2
+                  exit 1
+                fi
+              done
+            done
+          done
       - name: Verify development Mate capabilities
         if: needs.changes.outputs.run_checks == 'true' && matrix.name == 'development'
         run: |
           docker compose exec -T php vendor/bin/mate tools:list --format=json > "$RUNNER_TEMP/mate-tools.json"
           docker compose exec -T php vendor/bin/mate tools:call server-info --format=json > "$RUNNER_TEMP/mate-runtime.json"
-          docker compose exec -T php vendor/bin/mate tools:call symfony-services --query='App\Twig\Components\ArchivePreview' --limit=5 --format=json > "$RUNNER_TEMP/mate-services.json"
+          docker compose exec -T php vendor/bin/mate tools:call symfony-services --context=docker --query='App\Twig\Components\ArchivePreview' --limit=5 --format=json > "$RUNNER_TEMP/mate-services.json"
           python3 - "$RUNNER_TEMP/mate-tools.json" "$RUNNER_TEMP/mate-runtime.json" "$RUNNER_TEMP/mate-services.json" <<'PY'
           import json
           import sys
@@ -285,7 +316,7 @@ jobs:
           tools, runtime, services = results
           assert {'server-info', 'symfony-services', 'symfony-service-detail'} <= tools['tools'].keys()
           assert runtime['php_version'].startswith('8.5.')
-          assert r'App\Twig\Components\ArchivePreview' in services['untrusted_data']['services']
+          assert r'App\Twig\Components\ArchivePreview' in services['untrusted_data']['docker']['services']
           print('Mate reports PHP 8.5 and discovers the application component service.')
           PY
       - name: Verify production excludes development Mate files
@@ -311,6 +342,20 @@ jobs:
           curl --cacert "$RUNNER_TEMP/caddy-root.crt" --fail --silent --show-error "https://localhost:8443$css_path" --output /tmp/chess-dog.css
           test -s /tmp/chess-dog.css
           grep --quiet --fixed-strings 'tailwindcss v4.' /tmp/chess-dog.css
+      - name: Set up host PHP for shared development checks
+        if: needs.changes.outputs.run_checks == 'true' && matrix.name == 'development'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: intl, mbstring, pdo_sqlite, zip
+          tools: composer:v2
+          coverage: none
+      - name: Verify native tooling and container storage agree
+        if: needs.changes.outputs.run_checks == 'true' && matrix.name == 'development'
+        run: scripts/check-shared-storage --url "https://localhost:$HTTPS_PORT" --ca-file "$RUNNER_TEMP/caddy-root.crt" --check-migration
+      - name: Verify existing development user IDs
+        if: needs.changes.outputs.run_checks == 'true' && matrix.name == 'development'
+        run: scripts/check-dev-user 0:0 33:33
       - name: Print container logs on failure
         if: failure() && needs.changes.outputs.run_checks == 'true'
         run: docker compose logs --no-color || true

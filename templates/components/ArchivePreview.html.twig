@@ -2,7 +2,7 @@
     <div class="preview-fields">
         <div class="preview-field">
             <label for="preview-provider" class="field-label">Provider</label>
-            <select id="preview-provider" name="provider" class="preview-select" data-model="on(change)|provider" data-testid="provider-input">
+            <select id="preview-provider" name="provider" class="preview-select" autocomplete="off" data-model="on(change)|provider" data-testid="provider-input">
                 <option value="chesscom"{% if provider == 'chesscom' %} selected{% endif %}>Chess.com</option>
                 <option value="lichess"{% if provider == 'lichess' %} selected{% endif %}>Lichess</option>
             </select>

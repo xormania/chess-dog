@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'HELP'
+Usage: scripts/setup [options] [-- composer-install-options...]
+
+Set up native development with the PHP 8.5 and Composer on your PATH.
+Installs project dependencies, checks PHP extensions, discovers Mate tools,
+and compiles Tailwind. It does not install PHP, Composer or a browser.
+
+Options:
+  --env dev|test       Symfony environment for setup (default: dev)
+  --skip-assets        Skip Tailwind compilation; Composer scripts still run
+  --browser NAME      Install a driver for an already installed browser:
+                      google-chrome, chromium or firefox
+  -h, --help          Show this help
+  --                  Forward remaining options to composer install
+
+Examples:
+  scripts/setup
+  scripts/setup --env test --skip-assets -- --prefer-dist --no-progress
+  scripts/setup --browser chromium
+
+APP_CACHE_DIR and other explicit environment settings remain available to
+Symfony. Browser drivers are installed in drivers/ only when requested.
+HELP
+}
+
+fail() {
+    printf 'setup: %s\n' "$*" >&2
+    exit 2
+}
+
+setup_env=dev
+build_assets=true
+browser=''
+composer_args=()
+
+while (($#)); do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --env|--browser)
+            (($# >= 2)) || fail "$1 requires a value; see --help."
+            if [[ $1 == --env ]]; then setup_env=$2; else browser=$2; fi
+            shift 2
+            ;;
+        --env=*) setup_env=${1#*=}; shift ;;
+        --browser=*) browser=${1#*=}; shift ;;
+        --skip-assets) build_assets=false; shift ;;
+        --) shift; composer_args=("$@"); break ;;
+        *) fail "Unknown option: $1; see --help." ;;
+    esac
+done
+
+case "$setup_env" in dev|test) ;; *) fail '--env must be dev or test.' ;; esac
+case "$browser" in ''|google-chrome|chromium|firefox) ;; *) fail 'Unsupported --browser; see --help.' ;; esac
+for option in "${composer_args[@]}"; do
+    case "$option" in
+        --no-dev) fail 'Development dependencies are required for Mate and tests; omit --no-dev.' ;;
+        --dry-run) fail 'For a dependency preview, run composer install --dry-run directly.' ;;
+        -d|-d?*|--working-dir|--working-dir=*) fail 'Setup runs in this repository; omit the Composer directory override.' ;;
+    esac
+done
+[[ ${COMPOSER_NO_DEV:-0} != 1 ]] || fail 'Unset COMPOSER_NO_DEV to install the development tools.'
+
+command -v php >/dev/null || fail 'Install PHP 8.5 and put php on PATH first.'
+php -r 'if (PHP_MAJOR_VERSION !== 8 || PHP_MINOR_VERSION !== 5) { fwrite(STDERR, "setup: PHP 8.5 is required for the development tools; found ".PHP_VERSION.".\n"); exit(1); }'
+command -v composer >/dev/null || fail 'Install Composer and put composer on PATH first.'
+
+project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+cd -- "$project_dir"
+export APP_ENV=$setup_env
+
+if [[ -f .env.local.php ]]; then
+    printf '%s\n' 'Found .env.local.php: Symfony ignores a dump for another APP_ENV.'
+    printf '%s\n' 'A matching dump takes precedence over .env files; regenerate or remove it if those settings are stale.'
+fi
+
+composer install "${composer_args[@]}"
+composer check-platform-reqs
+[[ -f vendor/bin/mate ]] || fail 'Mate is missing after installation; install development dependencies with Composer plugins enabled.'
+php vendor/bin/mate discover --no-interaction
+
+if $build_assets; then
+    php bin/console tailwind:build
+fi
+
+if [[ -n $browser ]]; then
+    php vendor/bin/bdi "browser:$browser" drivers --no-interaction
+fi
+
+printf 'Native setup complete for APP_ENV=%s.\n' "$APP_ENV"

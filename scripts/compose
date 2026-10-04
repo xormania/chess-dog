@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Supply host ownership while retaining Docker Compose's own argument interface.
+set -euo pipefail
+
+if [[ $# == 0 || ${1:-} == --help ]]; then
+    cat <<'HELP'
+Usage: scripts/compose [Docker Compose options] COMMAND [options]
+
+Run development Compose with the current user's UID/GID as image build args.
+All arguments are forwarded to Docker Compose, from the project directory.
+
+Examples:
+  scripts/compose up --build --wait --wait-timeout 120
+  scripts/compose logs --follow php tailwind
+  scripts/compose exec php php bin/console about
+  scripts/compose down
+
+Environment overrides: LOCAL_UID, LOCAL_GID, HTTP_PORT, HTTPS_PORT, HTTP3_PORT,
+SERVER_NAME, COMPOSE_FILE, and the usual Docker Compose environment variables.
+Changing LOCAL_UID/LOCAL_GID requires rebuilding the development image.
+HELP
+    exit 0
+fi
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+export LOCAL_UID="${LOCAL_UID:-$(id -u)}"
+export LOCAL_GID="${LOCAL_GID:-$(id -g)}"
+exec docker compose "$@"

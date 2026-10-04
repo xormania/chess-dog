@@ -22,12 +22,16 @@
 **/Dockerfile
 **/Thumbs.db
 .github/
+.devbox/
+devbox.json
+devbox.lock
 .agents/
 .claude/
 docs/
 mate/
 public/bundles/
 tests/
+scripts/
 var/
 vendor/
 .editorconfig
