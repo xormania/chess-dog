@@ -18,6 +18,28 @@ services:
     # this creates a service per class whose id is the fully-qualified class name
     App\:
         resource: '../src/'
+        exclude:
+            - '../src/Archive/Model/'
+            - '../src/Archive/ArchiveUnavailable.php'
+
+    App\Archive\ArchiveContextProvider: '@App\Archive\ConfiguredArchiveContextProvider'
+
+    App\Archive\ConfiguredArchiveContextProvider:
+        arguments:
+            $workspaceId: '%env(CHESS_CRAWL_WORKSPACE_ID)%'
+            $apiToken: '%env(CHESS_CRAWL_API_TOKEN)%'
+
+    App\Archive\CrawlClient:
+        arguments:
+            $baseUrl: '%env(CHESS_CRAWL_API_BASE_URL)%'
+
+    App\Archive\TopicNames:
+        arguments:
+            $prefix: '%env(CHESS_CRAWL_TOPIC_PREFIX)%'
+
+    App\Archive\CrawlSubscriptions:
+        arguments:
+            $subscriberSecret: '%env(MERCURE_SUBSCRIBER_JWT_SECRET)%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
